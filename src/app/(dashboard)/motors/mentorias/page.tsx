@@ -4,6 +4,7 @@ import { LineChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
+import { MentoriaFormModal } from "@/components/mentorias/MentoriaFormModal";
 import {
   resolvePeriodFromSearchParams,
   type PeriodSearchParams,
@@ -73,7 +74,10 @@ export default async function MentoriasDashboardPage({ searchParams }: PageProps
             {formatDateBR(period.range.to)}
           </p>
         </div>
-        <PeriodFilter />
+        <div className="flex flex-wrap items-center gap-2">
+          <PeriodFilter />
+          <MentoriaFormModal />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
