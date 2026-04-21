@@ -14,7 +14,7 @@ export default function CompararMentoriasPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const query = useMentorias({});
 
-  const mentorias = query.data ?? [];
+  const mentorias = useMemo(() => query.data ?? [], [query.data]);
 
   const selected = useMemo(
     () =>

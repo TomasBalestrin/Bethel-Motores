@@ -96,16 +96,21 @@ export async function POST(request: NextRequest) {
     if (parsed.data.fields && parsed.data.fields.length > 0) {
       let order = 1;
       for (const field of parsed.data.fields) {
-        await addField(supabase, template.id, {
-          field_key: field.field_key,
-          label: field.label,
-          field_type: field.field_type,
-          unit: field.unit ?? null,
-          default_source: field.default_source,
-          display_order: order++,
-          is_required: field.is_required ?? false,
-          is_aggregable: field.is_aggregable ?? true,
-        });
+        await addField(
+          supabase,
+          template.id,
+          {
+            field_key: field.field_key,
+            label: field.label,
+            field_type: field.field_type,
+            unit: field.unit ?? null,
+            default_source: field.default_source,
+            display_order: order++,
+            is_required: field.is_required ?? false,
+            is_aggregable: field.is_aggregable ?? true,
+          },
+          { actorId: user.id }
+        );
       }
     }
 

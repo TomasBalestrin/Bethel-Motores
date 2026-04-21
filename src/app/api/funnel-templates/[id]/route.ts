@@ -147,28 +147,35 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       if (template.is_default !== undefined)
         patch.is_default = template.is_default;
       if (Object.keys(patch).length > 0) {
-        await updateTemplate(supabase, params.id, patch);
+        await updateTemplate(supabase, params.id, patch, {
+          actorId: user.id,
+        });
       }
     }
 
     if (addFieldInput) {
       const current = await getTemplateById(supabase, params.id);
       const nextOrder = (current?.fields?.length ?? 0) + 1;
-      await addField(supabase, params.id, {
-        field_key: addFieldInput.field_key,
-        label: addFieldInput.label,
-        field_type: addFieldInput.field_type,
-        unit: addFieldInput.unit ?? null,
-        default_source: addFieldInput.default_source,
-        display_order: nextOrder,
-        is_required: addFieldInput.is_required ?? false,
-        is_aggregable: addFieldInput.is_aggregable ?? true,
-      });
+      await addField(
+        supabase,
+        params.id,
+        {
+          field_key: addFieldInput.field_key,
+          label: addFieldInput.label,
+          field_type: addFieldInput.field_type,
+          unit: addFieldInput.unit ?? null,
+          default_source: addFieldInput.default_source,
+          display_order: nextOrder,
+          is_required: addFieldInput.is_required ?? false,
+          is_aggregable: addFieldInput.is_aggregable ?? true,
+        },
+        { actorId: user.id }
+      );
     }
 
     if (updateFieldInput) {
       const { id, ...patch } = updateFieldInput;
-      await updateField(supabase, id, patch);
+      await updateField(supabase, id, patch, { actorId: user.id });
     }
 
     if (deleteFieldInput) {
@@ -195,7 +202,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      await deleteField(supabase, deleteFieldInput.id);
+      await deleteField(supabase, deleteFieldInput.id, {
+        actorId: user.id,
+      });
     }
 
     if (reorder && reorder.length > 0) {

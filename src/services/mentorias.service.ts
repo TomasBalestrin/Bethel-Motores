@@ -12,6 +12,7 @@ import type {
   MentoriaSort,
 } from "@/lib/validators/mentoria";
 import type { MentoriaFilters, MentoriaWithMetrics } from "@/types/mentoria";
+import { logAudit } from "@/services/audit.service";
 
 interface MetricRow {
   mentoria_id: string;
@@ -299,19 +300,30 @@ export async function createMentoria(
   input: MentoriaCreateInput,
   options: CreateMentoriaOptions = {}
 ): Promise<{ id: string }> {
+  const row = {
+    name: input.name,
+    scheduled_at: input.scheduled_at,
+    specialist_id: input.specialist_id,
+    traffic_budget: input.traffic_budget ?? null,
+    created_by: options.actorId ?? null,
+  };
+
   const { data, error } = await supabase
     .from("mentorias")
-    .insert({
-      name: input.name,
-      scheduled_at: input.scheduled_at,
-      specialist_id: input.specialist_id,
-      traffic_budget: input.traffic_budget ?? null,
-      created_by: options.actorId ?? null,
-    })
+    .insert(row)
     .select("id")
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "mentoria",
+    entityId: data.id,
+    changes: { after: row },
+  });
+
   return data;
 }
 
@@ -392,8 +404,16 @@ export async function updateMentoria(
     specialist_id: string;
     traffic_budget: number | null;
     status: MentoriaStatus;
-  }>
+  }>,
+  options: { actorId?: string | null } = {}
 ): Promise<{ id: string }> {
+  const { data: before } = await supabase
+    .from("mentorias")
+    .select("name, scheduled_at, specialist_id, traffic_budget, status")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("mentorias")
     .update(patch)
@@ -403,6 +423,18 @@ export async function updateMentoria(
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "mentoria",
+    entityId: id,
+    changes: {
+      before: before ? (before as Record<string, unknown>) : null,
+      after: patch as Record<string, unknown>,
+    },
+  });
+
   return data;
 }
 
@@ -697,5 +729,27 @@ export async function insertMentoriaMetrics(
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "mentoria_metrics",
+    entityId: data.id,
+    changes: {
+      after: {
+        mentoria_id: mentoriaId,
+        leads_grupo: input.leads_grupo,
+        leads_ao_vivo: input.leads_ao_vivo,
+        agendamentos: input.agendamentos,
+        calls_realizadas: input.calls_realizadas,
+        vendas: input.vendas,
+        valor_vendas: input.valor_vendas,
+        valor_entrada: input.valor_entrada,
+        investimento_trafego: input.investimento_trafego,
+        investimento_api: input.investimento_api,
+      },
+    },
+  });
+
   return data;
 }

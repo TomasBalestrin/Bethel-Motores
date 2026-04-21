@@ -12,6 +12,7 @@ import type {
   FunnelCreateInput,
   FunnelSnapshotInput,
 } from "@/lib/validators/funnel";
+import { logAudit } from "@/services/audit.service";
 
 const FUNNEL_SELECT = `
   id,
@@ -431,18 +432,29 @@ export async function createTemplate(
   input: TemplateCreateInput,
   options: { actorId?: string } = {}
 ): Promise<{ id: string }> {
+  const row = {
+    name: input.name,
+    description: input.description ?? null,
+    is_default: input.is_default ?? false,
+    created_by: options.actorId ?? null,
+  };
+
   const { data, error } = await supabase
     .from("funnel_templates")
-    .insert({
-      name: input.name,
-      description: input.description ?? null,
-      is_default: input.is_default ?? false,
-      created_by: options.actorId ?? null,
-    })
+    .insert(row)
     .select("id")
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "funnel_template",
+    entityId: data.id,
+    changes: { after: row },
+  });
+
   return data;
 }
 
@@ -455,8 +467,15 @@ export interface TemplateUpdateInput {
 export async function updateTemplate(
   supabase: SupabaseClient,
   id: string,
-  patch: TemplateUpdateInput
+  patch: TemplateUpdateInput,
+  options: { actorId?: string | null } = {}
 ): Promise<{ id: string }> {
+  const { data: before } = await supabase
+    .from("funnel_templates")
+    .select("name, description, is_default")
+    .eq("id", id)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("funnel_templates")
     .update(patch)
@@ -466,6 +485,18 @@ export async function updateTemplate(
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "funnel_template",
+    entityId: id,
+    changes: {
+      before: before ? (before as Record<string, unknown>) : null,
+      after: patch as Record<string, unknown>,
+    },
+  });
+
   return data;
 }
 
@@ -483,25 +514,37 @@ export interface FieldInput {
 export async function addField(
   supabase: SupabaseClient,
   templateId: string,
-  input: FieldInput
+  input: FieldInput,
+  options: { actorId?: string | null } = {}
 ): Promise<{ id: string }> {
+  const row = {
+    template_id: templateId,
+    field_key: input.field_key,
+    label: input.label,
+    field_type: input.field_type,
+    unit: input.unit ?? null,
+    default_source: input.default_source,
+    display_order: input.display_order ?? 0,
+    is_required: input.is_required ?? false,
+    is_aggregable: input.is_aggregable ?? true,
+  };
+
   const { data, error } = await supabase
     .from("funnel_template_fields")
-    .insert({
-      template_id: templateId,
-      field_key: input.field_key,
-      label: input.label,
-      field_type: input.field_type,
-      unit: input.unit ?? null,
-      default_source: input.default_source,
-      display_order: input.display_order ?? 0,
-      is_required: input.is_required ?? false,
-      is_aggregable: input.is_aggregable ?? true,
-    })
+    .insert(row)
     .select("id")
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "funnel_template_field",
+    entityId: data.id,
+    changes: { after: row, meta: { template_id: templateId } },
+  });
+
   return data;
 }
 
@@ -518,8 +561,17 @@ export interface FieldUpdateInput {
 export async function updateField(
   supabase: SupabaseClient,
   fieldId: string,
-  patch: FieldUpdateInput
+  patch: FieldUpdateInput,
+  options: { actorId?: string | null } = {}
 ): Promise<{ id: string }> {
+  const { data: before } = await supabase
+    .from("funnel_template_fields")
+    .select(
+      "label, field_type, unit, default_source, display_order, is_required, is_aggregable"
+    )
+    .eq("id", fieldId)
+    .maybeSingle();
+
   const { data, error } = await supabase
     .from("funnel_template_fields")
     .update(patch)
@@ -528,6 +580,18 @@ export async function updateField(
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "funnel_template_field",
+    entityId: fieldId,
+    changes: {
+      before: before ? (before as Record<string, unknown>) : null,
+      after: patch as Record<string, unknown>,
+    },
+  });
+
   return data;
 }
 
@@ -557,13 +621,33 @@ export async function countFieldSnapshots(
 
 export async function deleteField(
   supabase: SupabaseClient,
-  fieldId: string
+  fieldId: string,
+  options: { actorId?: string | null } = {}
 ): Promise<void> {
+  const { data: before } = await supabase
+    .from("funnel_template_fields")
+    .select(
+      "template_id, field_key, label, field_type, unit, default_source, display_order, is_required, is_aggregable"
+    )
+    .eq("id", fieldId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("funnel_template_fields")
     .delete()
     .eq("id", fieldId);
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "delete",
+    entityType: "funnel_template_field",
+    entityId: fieldId,
+    changes: {
+      before: before ? (before as Record<string, unknown>) : null,
+      after: null,
+    },
+  });
 }
 
 export async function reorderFields(
