@@ -1,10 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -16,9 +29,11 @@ import {
 import { formatCurrency, formatDateTimeBR, formatInteger } from "@/lib/utils/format";
 import type { DisparoEvent } from "@/services/mentorias.service";
 import { DisparoEventDrawer } from "./DisparoEventDrawer";
+import { DisparoFormModal } from "./DisparoFormModal";
 
 interface DisparosListProps {
   events: DisparoEvent[];
+  mentoriaId: string;
 }
 
 const STATUS_LABEL: Record<DisparoEvent["status"], string> = {
@@ -35,8 +50,37 @@ const STATUS_CLASSES: Record<DisparoEvent["status"], string> = {
   skipped: "bg-muted text-muted-foreground border-border",
 };
 
-export function DisparosList({ events }: DisparosListProps) {
+export function DisparosList({ events, mentoriaId }: DisparosListProps) {
+  const router = useRouter();
   const [selected, setSelected] = useState<DisparoEvent | null>(null);
+  const [editing, setEditing] = useState<DisparoEvent | null>(null);
+  const [deleting, setDeleting] = useState<DisparoEvent | null>(null);
+  const [isDeletingBusy, setIsDeletingBusy] = useState(false);
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setIsDeletingBusy(true);
+    try {
+      const response = await fetch(`/api/disparos/${deleting.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Erro ao excluir"
+        );
+      }
+      toast.success("Disparo excluído");
+      setDeleting(null);
+      router.refresh();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Não foi possível excluir", { description: message });
+    } finally {
+      setIsDeletingBusy(false);
+    }
+  }
 
   if (events.length === 0) {
     return (
@@ -58,31 +102,46 @@ export function DisparosList({ events }: DisparosListProps) {
               <TableHead className="text-right">Entregue</TableHead>
               <TableHead className="text-right">Custo</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.map((event) => (
-              <TableRow
-                key={event.id}
-                className="cursor-pointer hover:bg-muted/40"
-                onClick={() => setSelected(event)}
-              >
-                <TableCell className="tabular-nums">
+              <TableRow key={event.id} className="hover:bg-muted/40">
+                <TableCell
+                  className="tabular-nums cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   {formatDateTimeBR(event.received_at)}
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell
+                  className="text-sm text-muted-foreground cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   {event.funnel_label ?? "—"}
                 </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
+                <TableCell
+                  className="text-right font-medium tabular-nums cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   {formatInteger(event.volume_sent)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell
+                  className="text-right tabular-nums cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   {formatInteger(event.volume_delivered)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell
+                  className="text-right tabular-nums cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   {formatCurrency(event.cost)}
                 </TableCell>
-                <TableCell>
+                <TableCell
+                  className="cursor-pointer"
+                  onClick={() => setSelected(event)}
+                >
                   <span className="inline-flex items-center gap-1">
                     <Badge
                       variant="outline"
@@ -98,6 +157,33 @@ export function DisparosList({ events }: DisparosListProps) {
                     ) : null}
                   </span>
                 </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Editar disparo"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditing(event);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Excluir disparo"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleting(event);
+                      }}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -107,10 +193,54 @@ export function DisparosList({ events }: DisparosListProps) {
       <DisparoEventDrawer
         event={selected}
         open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
+        onOpenChange={(next) => {
+          if (!next) setSelected(null);
         }}
       />
+
+      {editing ? (
+        <DisparoFormModal
+          mode="edit"
+          mentoriaId={mentoriaId}
+          disparo={editing}
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+        />
+      ) : null}
+
+      <AlertDialog
+        open={deleting !== null}
+        onOpenChange={(next) => {
+          if (!next && !isDeletingBusy) setDeleting(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir disparo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O evento será removido do
+              histórico da mentoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingBusy}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+              disabled={isDeletingBusy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingBusy ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

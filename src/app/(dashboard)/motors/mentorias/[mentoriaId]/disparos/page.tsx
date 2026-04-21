@@ -6,6 +6,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { formatCurrency, formatInteger } from "@/lib/utils/format";
 import { DisparosList } from "@/components/mentorias/DisparosList";
+import { DisparoFormModal } from "@/components/mentorias/DisparoFormModal";
 
 interface PageProps {
   params: { mentoriaId: string };
@@ -62,14 +63,18 @@ export default async function DisparosPage({ params }: PageProps) {
 
       <Card className="space-y-3 p-5">
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-heading text-base font-semibold">
-            Eventos Fluxon
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Click no evento para ver payload e reprocessar
-          </p>
+          <div className="space-y-0.5">
+            <h2 className="font-heading text-base font-semibold">
+              Eventos de disparos
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Clique na linha pra ver payload e reprocessar, ou use os botões
+              ao lado para editar/excluir manualmente.
+            </p>
+          </div>
+          <DisparoFormModal mentoriaId={params.mentoriaId} />
         </header>
-        <DisparosList events={events} />
+        <DisparosList events={events} mentoriaId={params.mentoriaId} />
       </Card>
     </div>
   );
