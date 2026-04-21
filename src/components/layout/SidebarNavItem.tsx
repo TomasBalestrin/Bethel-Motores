@@ -33,14 +33,20 @@ export function SidebarNavItem({
       aria-current={isActive ? "page" : undefined}
       title={collapsed ? label : undefined}
       className={cn(
-        "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-        "text-muted-foreground hover:bg-muted hover:text-foreground",
-        isActive && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
-        collapsed && "justify-center px-2",
-        !collapsed && indent && "pl-9"
+        "group flex items-center gap-3 border-l-[3px] px-7 py-[11px] text-[13.5px] font-medium transition-all",
+        "border-transparent text-white/55 hover:bg-accent/10 hover:text-white",
+        isActive && "border-accent bg-accent/10 text-white",
+        collapsed && "justify-center px-3",
+        !collapsed && indent && "pl-12"
       )}
     >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+      <Icon
+        className={cn(
+          "h-[18px] w-[18px] shrink-0 transition-opacity",
+          isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"
+        )}
+        aria-hidden
+      />
       {!collapsed ? <span className="truncate">{label}</span> : null}
     </Link>
   );
