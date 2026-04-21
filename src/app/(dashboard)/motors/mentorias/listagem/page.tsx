@@ -1,8 +1,7 @@
 import { GraduationCap } from "lucide-react";
 import { Suspense } from "react";
 
-import { createClient } from "@/lib/supabase/server";
-import { listMentorias } from "@/services/mentorias.service";
+import { cachedListMentorias } from "@/services/mentorias.cached";
 import {
   MENTORIA_SORT_OPTIONS,
   MENTORIA_STATUSES,
@@ -79,9 +78,8 @@ async function MentoriasSubtitle({
 }: {
   filters: { query?: string; status: MentoriaStatus | "all"; sort: MentoriaSort };
 }) {
-  const supabase = await createClient();
   try {
-    const mentorias = await listMentorias(supabase, filters);
+    const mentorias = await cachedListMentorias(filters);
     const count = mentorias.length;
     return (
       <p className="text-sm text-muted-foreground">
@@ -98,10 +96,8 @@ async function MentoriasGrid({
 }: {
   filters: { query?: string; status: MentoriaStatus | "all"; sort: MentoriaSort };
 }) {
-  const supabase = await createClient();
-
   try {
-    const mentorias = await listMentorias(supabase, filters);
+    const mentorias = await cachedListMentorias(filters);
 
     if (mentorias.length === 0) {
       return (

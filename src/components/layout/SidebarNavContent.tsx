@@ -13,6 +13,7 @@ import {
   Workflow,
 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/useUser";
 import type { UserRole } from "@/lib/auth/roles";
 import { SidebarNavItem } from "./SidebarNavItem";
@@ -92,8 +93,24 @@ interface SidebarNavContentProps {
 }
 
 export function SidebarNavContent({ collapsed = false }: SidebarNavContentProps) {
-  const { profile } = useUser();
+  const { profile, isLoading } = useUser();
   const role = profile?.role;
+
+  if (isLoading && !profile) {
+    return (
+      <nav className="flex flex-1 flex-col gap-2 overflow-y-auto py-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className={cn(
+              "mx-7 h-6 rounded-sm bg-white/5 animate-pulse",
+              collapsed && "mx-3 h-6 w-6"
+            )}
+          />
+        ))}
+      </nav>
+    );
+  }
 
   const motorsItems = MOTORS_NAV.filter((item) => canSee(item, role));
   const settingsItems = SETTINGS_NAV.filter((item) => canSee(item, role));

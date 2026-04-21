@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 
 import { createClient } from "@/lib/supabase/server";
 import {
-  listAudit,
+  listAuditPaginated,
   listDistinctEntityTypes,
+  type AuditPage,
 } from "@/services/audit.service";
 import { listUsers } from "@/services/users.service";
 import { Card } from "@/components/ui/card";
@@ -19,20 +20,35 @@ interface PageProps {
     user_id?: string;
     from?: string;
     to?: string;
+    page?: string;
   };
 }
 
+const PAGE_SIZE = 50;
+
 export default async function AuditPage({ searchParams }: PageProps) {
   const supabase = await createClient();
+  const page = Math.max(1, Number.parseInt(searchParams.page ?? "1", 10) || 1);
 
-  const [entries, entityTypes, users] = await Promise.all([
-    listAudit(supabase, {
-      entityType: searchParams.entity_type,
-      userId: searchParams.user_id,
-      from: searchParams.from,
-      to: searchParams.to,
-      limit: 200,
-    }).catch(() => []),
+  const emptyPage: AuditPage = {
+    entries: [],
+    total: 0,
+    page,
+    pageSize: PAGE_SIZE,
+  };
+
+  const [auditPage, entityTypes, users] = await Promise.all([
+    listAuditPaginated(
+      supabase,
+      {
+        entityType: searchParams.entity_type,
+        userId: searchParams.user_id,
+        from: searchParams.from,
+        to: searchParams.to,
+      },
+      page,
+      PAGE_SIZE
+    ).catch(() => emptyPage),
     listDistinctEntityTypes(supabase).catch(() => [] as string[]),
     listUsers(supabase).catch(() => []),
   ]);
@@ -44,14 +60,16 @@ export default async function AuditPage({ searchParams }: PageProps) {
           Auditoria
         </h1>
         <p className="text-sm text-muted-foreground">
-          Histórico de mudanças críticas — retendo até 200 registros mais
-          recentes.
+          Histórico de mudanças críticas no sistema.
         </p>
       </header>
 
       <Card className="space-y-3 p-5">
         <AuditTable
-          entries={entries}
+          entries={auditPage.entries}
+          total={auditPage.total}
+          page={auditPage.page}
+          pageSize={auditPage.pageSize}
           entityTypes={entityTypes}
           users={users.map((user) => ({
             id: user.id,

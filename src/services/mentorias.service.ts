@@ -753,3 +753,19 @@ export async function insertMentoriaMetrics(
 
   return data;
 }
+
+export async function getMentoriaWithMetricsById(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<MentoriaWithMetrics | null> {
+  const { data, error } = await supabase
+    .from("mentorias")
+    .select(MENTORIA_SELECT)
+    .eq("id", mentoriaId)
+    .is("deleted_at", null)
+    .maybeSingle<MentoriaRow>();
+
+  if (error) throw error;
+  if (!data) return null;
+  return toMentoriaDTO(data);
+}
