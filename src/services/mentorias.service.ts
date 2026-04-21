@@ -496,3 +496,119 @@ export async function insertTrafegoEntry(
   if (error) throw error;
   return data;
 }
+
+export interface DisparoEvent {
+  id: string;
+  source_id: string;
+  source_slug: string | null;
+  mentoria_id: string | null;
+  payload: Record<string, unknown>;
+  status: "pending" | "processed" | "error" | "skipped";
+  error_message: string | null;
+  source_event_id: string | null;
+  received_at: string;
+  processed_at: string | null;
+  volume_sent: number;
+  volume_delivered: number;
+  cost: number;
+  funnel_label: string | null;
+}
+
+interface DisparoRow {
+  id: string;
+  source_id: string;
+  mentoria_id: string | null;
+  payload: Record<string, unknown> | null;
+  status: "pending" | "processed" | "error" | "skipped";
+  error_message: string | null;
+  source_event_id: string | null;
+  received_at: string;
+  processed_at: string | null;
+  source: { slug: string | null } | null;
+}
+
+function pickNumber(payload: Record<string, unknown> | null, keys: string[]): number {
+  if (!payload) return 0;
+  for (const key of keys) {
+    const value = (payload as Record<string, unknown>)[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return 0;
+}
+
+function pickString(
+  payload: Record<string, unknown> | null,
+  keys: string[]
+): string | null {
+  if (!payload) return null;
+  for (const key of keys) {
+    const value = (payload as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim().length > 0) return value;
+  }
+  return null;
+}
+
+function toDisparoDTO(row: DisparoRow): DisparoEvent {
+  const payload = row.payload ?? {};
+  return {
+    id: row.id,
+    source_id: row.source_id,
+    source_slug: row.source?.slug ?? null,
+    mentoria_id: row.mentoria_id,
+    payload,
+    status: row.status,
+    error_message: row.error_message,
+    source_event_id: row.source_event_id,
+    received_at: row.received_at,
+    processed_at: row.processed_at,
+    volume_sent: pickNumber(payload as Record<string, unknown>, [
+      "volume",
+      "volume_sent",
+      "sent",
+    ]),
+    volume_delivered: pickNumber(payload as Record<string, unknown>, [
+      "volume_delivered",
+      "delivered",
+    ]),
+    cost: pickNumber(payload as Record<string, unknown>, ["cost", "amount", "value"]),
+    funnel_label: pickString(payload as Record<string, unknown>, [
+      "funnel",
+      "funnel_name",
+      "funnel_id",
+    ]),
+  };
+}
+
+export async function listDisparosByMentoria(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<DisparoEvent[]> {
+  const { data, error } = await supabase
+    .from("integration_events")
+    .select(
+      `
+        id,
+        source_id,
+        mentoria_id,
+        payload,
+        status,
+        error_message,
+        source_event_id,
+        received_at,
+        processed_at,
+        source:integration_sources!integration_events_source_id_fkey(slug)
+      `
+    )
+    .eq("mentoria_id", mentoriaId)
+    .order("received_at", { ascending: false })
+    .returns<DisparoRow[]>();
+
+  if (error) throw error;
+  return (data ?? [])
+    .filter((row) => row.source?.slug === "fluxon")
+    .map(toDisparoDTO);
+}
