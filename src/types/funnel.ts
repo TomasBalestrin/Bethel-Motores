@@ -1,4 +1,8 @@
-import type { FieldType, MetricSource } from "@/lib/validators/funnel";
+import type {
+  FieldType,
+  FunnelSnapshotInput,
+  MetricSource,
+} from "@/lib/validators/funnel";
 
 export interface FunnelTemplateField {
   id: string;
@@ -28,6 +32,8 @@ export interface FunnelFieldValue {
   captured_at: string | null;
 }
 
+export type FunnelCurrentValue = FunnelFieldValue;
+
 export interface Funnel {
   id: string;
   name: string;
@@ -43,3 +49,15 @@ export interface FunnelWithTemplate extends Funnel {
   template: FunnelTemplate | null;
   values: FunnelFieldValue[];
 }
+
+export interface FunnelFieldHistoryEntry {
+  field_key: string;
+  value_numeric: number | null;
+  value_text: string | null;
+  source: MetricSource;
+  source_ref: string | null;
+  captured_by: string | null;
+  captured_at: string;
+}
+
+export type { FunnelSnapshotInput };
