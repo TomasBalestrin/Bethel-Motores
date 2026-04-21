@@ -18,6 +18,7 @@ export default function MentoriasError({
     <ErrorState
       title="Não foi possível carregar Mentorias"
       description="Algo deu errado ao buscar dados do motor. Tente novamente ou volte."
+      digest={error.digest}
       onReset={reset}
       backHref="/motors"
     />

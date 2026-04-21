@@ -46,13 +46,16 @@ function zeroStats(from: string, to: string): MotorStatsPayload {
 
 export default async function MentoriasDashboardPage({ searchParams }: PageProps) {
   const period = resolvePeriodFromSearchParams(searchParams);
-  const supabase = await createClient();
 
   let stats: MotorStatsPayload;
   try {
+    const supabase = await createClient();
     stats = await getMotorStats(supabase, period.range);
   } catch (error) {
-    console.error("[/motors/mentorias]", error);
+    console.error(
+      "[/motors/mentorias] getMotorStats failed:",
+      error instanceof Error ? error.message : error
+    );
     stats = zeroStats(period.range.from, period.range.to);
   }
 

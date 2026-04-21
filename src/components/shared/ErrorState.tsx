@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 interface ErrorStateProps {
   title: string;
   description?: string;
+  digest?: string;
   onReset?: () => void;
   backHref?: string;
   backLabel?: string;
@@ -16,6 +17,7 @@ interface ErrorStateProps {
 export function ErrorState({
   title,
   description,
+  digest,
   onReset,
   backHref = "/motors",
   backLabel = "Voltar para Motores",
@@ -35,6 +37,11 @@ export function ErrorState({
         <h2 className="font-heading text-xl font-semibold">{title}</h2>
         {description ? (
           <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+        ) : null}
+        {digest ? (
+          <p className="pt-1 font-mono text-[11px] text-muted-foreground/70">
+            ref: {digest}
+          </p>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
