@@ -97,15 +97,15 @@ async function fetchTrafficCapture(
 ): Promise<number> {
   const { data, error } = await supabase
     .from("funnel_metric_snapshots")
-    .select("numeric_value, origin, captured_at")
-    .eq("origin", "traffic")
+    .select("value_numeric, captured_at, funnels!inner(is_traffic_funnel)")
+    .eq("funnels.is_traffic_funnel", true)
     .gte("captured_at", toRangeStartISO(from))
     .lte("captured_at", toRangeEndISO(to))
-    .returns<{ numeric_value: number | null; origin: string; captured_at: string }[]>();
+    .returns<{ value_numeric: number | null; captured_at: string }[]>();
 
   if (error) return 0;
   if (!data) return 0;
-  return data.reduce((sum, row) => sum + Number(row.numeric_value ?? 0), 0);
+  return data.reduce((sum, row) => sum + Number(row.value_numeric ?? 0), 0);
 }
 
 async function countActiveMentorias(supabase: SupabaseClient): Promise<number> {

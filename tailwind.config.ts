@@ -60,6 +60,10 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -72,18 +76,29 @@ const config: Config = {
         },
       },
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm: "6px",
+        md: "10px",
+        lg: "14px",
+        xl: "20px",
+        DEFAULT: "var(--radius)",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
-        heading: [
-          "var(--font-jakarta)",
-          "var(--font-inter)",
-          "system-ui",
-          "sans-serif",
+        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        heading: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        mono: [
+          "JetBrains Mono",
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "monospace",
         ],
+      },
+      boxShadow: {
+        sm: "0 1px 3px rgba(0, 19, 33, 0.08)",
+        DEFAULT: "0 4px 12px rgba(0, 19, 33, 0.10)",
+        md: "0 4px 12px rgba(0, 19, 33, 0.10)",
+        lg: "0 8px 30px rgba(0, 19, 33, 0.12)",
+        xl: "0 16px 50px rgba(0, 19, 33, 0.16)",
       },
       keyframes: {
         "accordion-down": {
