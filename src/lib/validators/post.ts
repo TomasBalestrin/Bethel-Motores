@@ -3,10 +3,6 @@ import { z } from "zod";
 export const postCreateSchema = z.object({
   code: z.string().trim().min(1).max(64),
   link: z.string().trim().url().max(2048),
-  budget: z
-    .union([z.number().nonnegative(), z.null()])
-    .optional()
-    .nullable(),
 });
 export type PostCreateInput = z.infer<typeof postCreateSchema>;
 

@@ -34,7 +34,7 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
 
   const form = useForm<PostCreateInput>({
     resolver: zodResolver(postCreateSchema),
-    defaultValues: { code: "", link: "", budget: null },
+    defaultValues: { code: "", link: "" },
   });
 
   async function onSubmit(input: PostCreateInput) {
@@ -77,7 +77,7 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
         <DialogHeader>
           <DialogTitle>Novo post</DialogTitle>
           <DialogDescription>
-            Informe código, link do post e orçamento inicial.
+            Informe o código e o link do post.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,22 +113,6 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
                 {form.formState.errors.link.message}
               </p>
             ) : null}
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="post-budget">Orçamento (R$)</Label>
-            <Input
-              id="post-budget"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min={0}
-              placeholder="0,00"
-              {...form.register("budget", {
-                setValueAs: (value) =>
-                  value === "" || value == null ? null : Number(value),
-              })}
-            />
           </div>
 
           <DialogFooter>

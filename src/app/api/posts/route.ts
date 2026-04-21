@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
       {
         code: parsed.data.code,
         link: parsed.data.link,
-        budget: parsed.data.budget ?? null,
       },
       { actorId: user.id }
     );
