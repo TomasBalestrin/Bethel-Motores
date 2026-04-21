@@ -63,6 +63,8 @@ export async function inviteUser(
   input: InviteUserInput
 ): Promise<InviteUserResult> {
   const password = input.password ?? generatePassword(16);
+  const fallbackName = input.email.split("@")[0] ?? input.email;
+  const name = input.name?.trim() || fallbackName;
 
   const { data, error } = await admin.auth.admin.createUser({
     email: input.email,
@@ -70,7 +72,7 @@ export async function inviteUser(
     email_confirm: true,
     user_metadata: {
       role: input.role,
-      name: input.name ?? null,
+      name,
     },
   });
 
@@ -83,7 +85,7 @@ export async function inviteUser(
     {
       id: userId,
       email: data.user.email ?? input.email,
-      name: input.name ?? null,
+      name,
       role: input.role,
       is_active: true,
     },
