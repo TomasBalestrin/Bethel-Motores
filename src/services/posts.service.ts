@@ -156,3 +156,84 @@ export async function insertAnalysis(
   if (error) throw error;
   return data;
 }
+
+export interface AnalysisEntry {
+  id: string;
+  post_id: string;
+  source: "file" | "link" | "text";
+  file_url: string | null;
+  file_name: string | null;
+  link: string | null;
+  note: string | null;
+  content_text: string | null;
+  created_by: string | null;
+  author_name: string | null;
+  created_at: string;
+}
+
+interface AnalysisRow {
+  id: string;
+  post_id: string;
+  source: "file" | "link" | "text";
+  file_url: string | null;
+  file_name: string | null;
+  link: string | null;
+  note: string | null;
+  content_text: string | null;
+  created_by: string | null;
+  created_at: string;
+  author: { name: string | null } | null;
+}
+
+export async function listAnalyses(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<AnalysisEntry[]> {
+  const { data, error } = await supabase
+    .from("post_analyses")
+    .select(
+      `
+        id,
+        post_id,
+        source,
+        file_url,
+        file_name,
+        link,
+        note,
+        content_text,
+        created_by,
+        created_at,
+        author:user_profiles!post_analyses_created_by_fkey(name)
+      `
+    )
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .returns<AnalysisRow[]>();
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    post_id: row.post_id,
+    source: row.source,
+    file_url: row.file_url,
+    file_name: row.file_name,
+    link: row.link,
+    note: row.note,
+    content_text: row.content_text,
+    created_by: row.created_by,
+    author_name: row.author?.name ?? null,
+    created_at: row.created_at,
+  }));
+}
+
+export async function createSignedAnalysisUrl(
+  supabase: SupabaseClient,
+  filePath: string,
+  expiresInSeconds = 60 * 5
+): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from("post-analyses")
+    .createSignedUrl(filePath, expiresInSeconds);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}

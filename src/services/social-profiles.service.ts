@@ -316,3 +316,34 @@ export async function getProfileDashboardStats(
     spend,
   };
 }
+
+export interface CreateSocialProfileInput {
+  motor_id: string;
+  slug: string;
+  name: string;
+  instagram_handle?: string | null;
+  avatar_url?: string | null;
+}
+
+export async function createSocialProfile(
+  supabase: SupabaseClient,
+  input: CreateSocialProfileInput,
+  options: { actorId?: string | null } = {}
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("social_profiles")
+    .insert({
+      motor_id: input.motor_id,
+      slug: input.slug,
+      name: input.name,
+      instagram_handle: input.instagram_handle ?? null,
+      avatar_url: input.avatar_url ?? null,
+      is_active: true,
+      created_by: options.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}

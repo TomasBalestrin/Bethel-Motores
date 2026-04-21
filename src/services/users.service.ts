@@ -138,3 +138,37 @@ export async function reactivateUser(
 
   return data;
 }
+
+export interface SelfProfilePatch {
+  name?: string | null;
+  avatar_url?: string | null;
+}
+
+export async function updateOwnProfile(
+  supabase: SupabaseClient,
+  userId: string,
+  patch: SelfProfilePatch
+): Promise<UserProfile> {
+  const update: Record<string, unknown> = {};
+  if (patch.name !== undefined) update.name = patch.name;
+  if (patch.avatar_url !== undefined) update.avatar_url = patch.avatar_url;
+
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update(update)
+    .eq("id", userId)
+    .select(USER_PROFILE_COLUMNS)
+    .single<UserProfile>();
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId,
+    action: "update",
+    entityType: "user_profile",
+    entityId: userId,
+    changes: { after: update, meta: { self: true } },
+  });
+
+  return data;
+}

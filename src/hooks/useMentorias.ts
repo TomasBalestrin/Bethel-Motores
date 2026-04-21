@@ -8,6 +8,7 @@ import {
 } from "@/services/mentorias.service";
 import type {
   MentoriaCreateInput,
+  MentoriaUpdateInput,
 } from "@/lib/validators/mentoria";
 import type {
   MentoriaFilters,
@@ -33,6 +34,35 @@ export function useCreateMentoria() {
   return useMutation({
     mutationFn: (input: MentoriaCreateInput) =>
       createMentoria(createClient(), input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: MENTORIAS_QUERY_KEY });
+    },
+  });
+}
+
+export function useUpdateMentoria() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      patch,
+    }: {
+      id: string;
+      patch: MentoriaUpdateInput;
+    }) => {
+      const response = await fetch(`/api/mentorias/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Erro ao atualizar"
+        );
+      }
+      return (await response.json()) as { data: { id: string } };
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: MENTORIAS_QUERY_KEY });
     },

@@ -29,6 +29,7 @@ import type {
   ProfilePost,
 } from "@/services/social-profiles.service";
 import { PostMetricsChart } from "./PostMetricsChart";
+import { PostAnalysesList } from "./PostAnalysesList";
 
 interface PostDetailModalProps {
   post: ProfilePost | null;
@@ -148,6 +149,13 @@ export function PostDetailModal({
           ) : (
             <PostMetricsChart history={history} metric={metric} />
           )}
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Análises
+          </p>
+          <PostAnalysesList postId={post.id} />
         </div>
       </DialogContent>
     </Dialog>

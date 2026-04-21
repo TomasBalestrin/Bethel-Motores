@@ -4,12 +4,15 @@ import { useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
+  Clock,
   ExternalLink,
   Globe,
   PencilLine,
   Plug,
   User as UserIcon,
 } from "lucide-react";
+
+import { FunnelFieldHistoryDrawer } from "./FunnelFieldHistoryDrawer";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -49,8 +52,15 @@ function formatFieldValue(
   return value.toLocaleString("pt-BR");
 }
 
+interface HistoryTarget {
+  fieldKey: string;
+  label: string;
+  type: FieldType;
+}
+
 export function FunnelCard({ funnel, onEdit }: FunnelCardProps) {
   const [expanded, setExpanded] = useState(true);
+  const [historyFor, setHistoryFor] = useState<HistoryTarget | null>(null);
 
   const valueMap = useMemo(() => {
     const map = new Map<string, FunnelFieldValue>();
@@ -132,11 +142,27 @@ export function FunnelCard({ funnel, onEdit }: FunnelCardProps) {
                     "flex flex-col gap-1 rounded-md bg-muted/50 px-3 py-2"
                   )}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1">
                     <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                       {field.label}
                     </span>
-                    <SourceIcon source={source} />
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Ver histórico de ${field.label}`}
+                        onClick={() =>
+                          setHistoryFor({
+                            fieldKey: field.field_key,
+                            label: field.label,
+                            type: field.field_type,
+                          })
+                        }
+                        className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Clock className="h-3 w-3" />
+                      </button>
+                      <SourceIcon source={source} />
+                    </div>
                   </div>
                   <span className="font-heading text-sm font-semibold tabular-nums">
                     {formatFieldValue(field.field_type, current)}
@@ -147,6 +173,17 @@ export function FunnelCard({ funnel, onEdit }: FunnelCardProps) {
           )}
         </div>
       ) : null}
+
+      <FunnelFieldHistoryDrawer
+        funnelId={funnel.id}
+        fieldKey={historyFor?.fieldKey ?? null}
+        fieldLabel={historyFor?.label ?? null}
+        fieldType={historyFor?.type}
+        open={historyFor !== null}
+        onOpenChange={(open) => {
+          if (!open) setHistoryFor(null);
+        }}
+      />
     </Card>
   );
 }

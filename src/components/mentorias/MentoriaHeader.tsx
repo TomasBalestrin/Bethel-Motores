@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Pencil } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -5,12 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeBR } from "@/lib/utils/format";
 import type { MentoriaDetail } from "@/types/mentoria";
+import { MentoriaFormModal } from "./MentoriaFormModal";
 
 interface MentoriaHeaderProps {
   mentoria: MentoriaDetail;
 }
 
 export function MentoriaHeader({ mentoria }: MentoriaHeaderProps) {
+  const [editOpen, setEditOpen] = useState(false);
+
   const statusLabel =
     mentoria.status === "concluida" ? "Concluída" : "Em andamento";
   const statusClasses =
@@ -45,10 +51,23 @@ export function MentoriaHeader({ mentoria }: MentoriaHeaderProps) {
         </div>
       </div>
 
-      <Button variant="outline" disabled>
+      <Button variant="outline" onClick={() => setEditOpen(true)}>
         <Pencil className="mr-1 h-4 w-4" />
         Editar
       </Button>
+
+      <MentoriaFormModal
+        mode="edit"
+        mentoria={{
+          id: mentoria.id,
+          name: mentoria.name,
+          scheduled_at: mentoria.scheduled_at,
+          specialist_id: mentoria.specialist_id,
+          traffic_budget: mentoria.traffic_budget,
+        }}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
     </header>
   );
 }
