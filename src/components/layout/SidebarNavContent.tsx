@@ -15,7 +15,6 @@ import {
 
 import { useUser } from "@/hooks/useUser";
 import type { UserRole } from "@/lib/auth/roles";
-import { Separator } from "@/components/ui/separator";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 interface NavEntry {
@@ -100,7 +99,7 @@ export function SidebarNavContent({ collapsed = false }: SidebarNavContentProps)
   const settingsItems = SETTINGS_NAV.filter((item) => canSee(item, role));
 
   return (
-    <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto py-4">
       {motorsItems.map((item) => (
         <SidebarNavItem
           key={item.href}
@@ -113,7 +112,7 @@ export function SidebarNavContent({ collapsed = false }: SidebarNavContentProps)
         />
       ))}
 
-      <Separator className="my-2" />
+      <div className="mx-7 my-4 h-px bg-white/10" />
 
       {settingsItems.map((item) => (
         <SidebarNavItem
