@@ -3,11 +3,11 @@ import { LineChart } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import {
-  PeriodFilter,
   resolvePeriodFromSearchParams,
   type PeriodSearchParams,
-} from "@/components/dashboard/PeriodFilter";
+} from "@/lib/utils/period";
 import { createClient } from "@/lib/supabase/server";
 import { getMotorStats, type MotorStatsPayload } from "@/services/mentorias.service";
 import { formatDateBR } from "@/lib/utils/format";
