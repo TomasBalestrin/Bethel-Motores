@@ -327,3 +327,255 @@ export async function listFieldHistory(
   if (error) throw error;
   return data ?? [];
 }
+
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  is_default: boolean;
+  fieldCount: number;
+  funnelCount: number;
+  updated_at: string;
+}
+
+export async function listTemplates(
+  supabase: SupabaseClient
+): Promise<TemplateSummary[]> {
+  const { data, error } = await supabase
+    .from("funnel_templates")
+    .select(
+      `
+        id,
+        name,
+        description,
+        is_default,
+        updated_at,
+        fields:funnel_template_fields(count),
+        funnels(count)
+      `
+    )
+    .is("deleted_at", null)
+    .order("is_default", { ascending: false })
+    .order("name", { ascending: true })
+    .returns<
+      {
+        id: string;
+        name: string;
+        description: string | null;
+        is_default: boolean;
+        updated_at: string;
+        fields: { count: number }[] | null;
+        funnels: { count: number }[] | null;
+      }[]
+    >();
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    is_default: row.is_default,
+    updated_at: row.updated_at,
+    fieldCount: row.fields?.[0]?.count ?? 0,
+    funnelCount: row.funnels?.[0]?.count ?? 0,
+  }));
+}
+
+export async function getTemplateById(
+  supabase: SupabaseClient,
+  id: string
+): Promise<FunnelTemplate | null> {
+  const { data, error } = await supabase
+    .from("funnel_templates")
+    .select(
+      `
+        id,
+        name,
+        description,
+        is_default,
+        fields:funnel_template_fields(
+          id,
+          field_key,
+          label,
+          field_type,
+          unit,
+          default_source,
+          display_order,
+          is_required,
+          is_aggregable
+        )
+      `
+    )
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle<Omit<FunnelTemplate, "fields"> & {
+      fields: FunnelTemplateField[] | null;
+    }>();
+
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    ...data,
+    fields: sortFields(data.fields ?? null),
+  };
+}
+
+export interface TemplateCreateInput {
+  name: string;
+  description?: string | null;
+  is_default?: boolean;
+}
+
+export async function createTemplate(
+  supabase: SupabaseClient,
+  input: TemplateCreateInput,
+  options: { actorId?: string } = {}
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("funnel_templates")
+    .insert({
+      name: input.name,
+      description: input.description ?? null,
+      is_default: input.is_default ?? false,
+      created_by: options.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
+
+export interface TemplateUpdateInput {
+  name?: string;
+  description?: string | null;
+  is_default?: boolean;
+}
+
+export async function updateTemplate(
+  supabase: SupabaseClient,
+  id: string,
+  patch: TemplateUpdateInput
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("funnel_templates")
+    .update(patch)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
+
+export interface FieldInput {
+  field_key: string;
+  label: string;
+  field_type: FunnelTemplateField["field_type"];
+  unit?: string | null;
+  default_source: FunnelTemplateField["default_source"];
+  display_order?: number;
+  is_required?: boolean;
+  is_aggregable?: boolean;
+}
+
+export async function addField(
+  supabase: SupabaseClient,
+  templateId: string,
+  input: FieldInput
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("funnel_template_fields")
+    .insert({
+      template_id: templateId,
+      field_key: input.field_key,
+      label: input.label,
+      field_type: input.field_type,
+      unit: input.unit ?? null,
+      default_source: input.default_source,
+      display_order: input.display_order ?? 0,
+      is_required: input.is_required ?? false,
+      is_aggregable: input.is_aggregable ?? true,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
+
+export interface FieldUpdateInput {
+  label?: string;
+  field_type?: FunnelTemplateField["field_type"];
+  unit?: string | null;
+  default_source?: FunnelTemplateField["default_source"];
+  display_order?: number;
+  is_required?: boolean;
+  is_aggregable?: boolean;
+}
+
+export async function updateField(
+  supabase: SupabaseClient,
+  fieldId: string,
+  patch: FieldUpdateInput
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("funnel_template_fields")
+    .update(patch)
+    .eq("id", fieldId)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function countFieldSnapshots(
+  supabase: SupabaseClient,
+  templateId: string,
+  fieldKey: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("funnels")
+    .select("id")
+    .eq("template_id", templateId)
+    .returns<{ id: string }[]>();
+
+  if (error) return 0;
+  const funnelIds = (data ?? []).map((row) => row.id);
+  if (funnelIds.length === 0) return 0;
+
+  const { count } = await supabase
+    .from("funnel_metric_snapshots")
+    .select("id", { count: "exact", head: true })
+    .in("funnel_id", funnelIds)
+    .eq("field_key", fieldKey);
+
+  return count ?? 0;
+}
+
+export async function deleteField(
+  supabase: SupabaseClient,
+  fieldId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("funnel_template_fields")
+    .delete()
+    .eq("id", fieldId);
+  if (error) throw error;
+}
+
+export async function reorderFields(
+  supabase: SupabaseClient,
+  items: { id: string; display_order: number }[]
+): Promise<void> {
+  await Promise.all(
+    items.map((item) =>
+      supabase
+        .from("funnel_template_fields")
+        .update({ display_order: item.display_order })
+        .eq("id", item.id)
+    )
+  );
+}
