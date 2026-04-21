@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { ExternalLink, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -28,8 +29,22 @@ import type {
   PostMetricsHistoryEntry,
   ProfilePost,
 } from "@/services/social-profiles.service";
-import { PostMetricsChart } from "./PostMetricsChart";
 import { PostAnalysesList } from "./PostAnalysesList";
+
+const PostMetricsChart = dynamic(
+  () =>
+    import("./PostMetricsChart").then((mod) => ({
+      default: mod.PostMetricsChart,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-40 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+        <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Carregando chart...
+      </div>
+    ),
+  }
+);
 
 interface PostDetailModalProps {
   post: ProfilePost | null;
