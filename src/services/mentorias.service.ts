@@ -1,11 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calcDelta, type DeltaResult } from "@/lib/utils/calc";
+import { calcDelta, calcPercent, type DeltaResult } from "@/lib/utils/calc";
 import {
   rangeToRangeWithPrevious,
   toRangeEndISO,
   toRangeStartISO,
 } from "@/lib/utils/date-range";
 import type { DateRange } from "@/types/common";
+import type {
+  MentoriaCreateInput,
+  MentoriaStatus,
+  MentoriaSort,
+} from "@/lib/validators/mentoria";
+import type { MentoriaFilters, MentoriaWithMetrics } from "@/types/mentoria";
 
 interface MetricRow {
   mentoria_id: string;
@@ -153,4 +159,158 @@ export async function getMotorStats(
       ),
     },
   };
+}
+
+interface MentoriaRow {
+  id: string;
+  name: string;
+  scheduled_at: string;
+  status: MentoriaStatus;
+  specialist: {
+    id: string;
+    name: string;
+    slug: string | null;
+  } | null;
+  latest_metrics:
+    | {
+        leads_grupo: number | null;
+        leads_ao_vivo: number | null;
+        agendamentos: number | null;
+        calls_realizadas: number | null;
+        vendas: number | null;
+        valor_vendas: number | null;
+        valor_entrada: number | null;
+        investimento_trafego: number | null;
+        investimento_api: number | null;
+        captured_at: string;
+      }[]
+    | null;
+}
+
+const MENTORIA_SELECT = `
+  id,
+  name,
+  scheduled_at,
+  status,
+  specialist:social_profiles!mentorias_specialist_id_fkey(id, name, slug),
+  latest_metrics:mentoria_metrics(
+    leads_grupo,
+    leads_ao_vivo,
+    agendamentos,
+    calls_realizadas,
+    vendas,
+    valor_vendas,
+    valor_entrada,
+    investimento_trafego,
+    investimento_api,
+    captured_at
+  )
+`;
+
+function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
+  const snapshots = row.latest_metrics ?? [];
+  const latest = snapshots.length
+    ? [...snapshots].sort(
+        (a, b) =>
+          new Date(b.captured_at).getTime() - new Date(a.captured_at).getTime()
+      )[0] ?? null
+    : null;
+
+  const leadsGrupo = Number(latest?.leads_grupo ?? 0);
+  const leadsAoVivo = Number(latest?.leads_ao_vivo ?? 0);
+  const agendamentos = Number(latest?.agendamentos ?? 0);
+  const callsRealizadas = Number(latest?.calls_realizadas ?? 0);
+  const vendas = Number(latest?.vendas ?? 0);
+
+  return {
+    id: row.id,
+    name: row.name,
+    scheduled_at: row.scheduled_at,
+    status: row.status,
+    specialist: row.specialist ?? null,
+    leads_grupo: leadsGrupo,
+    leads_ao_vivo: leadsAoVivo,
+    agendamentos,
+    calls_realizadas: callsRealizadas,
+    vendas,
+    valor_vendas: Number(latest?.valor_vendas ?? 0),
+    valor_entrada: Number(latest?.valor_entrada ?? 0),
+    investimento_trafego: Number(latest?.investimento_trafego ?? 0),
+    investimento_api: Number(latest?.investimento_api ?? 0),
+    last_metric_at: latest?.captured_at ?? null,
+    pct_comparecimento: calcPercent(leadsAoVivo, leadsGrupo),
+    pct_agendamento: calcPercent(agendamentos, leadsAoVivo),
+    pct_comparecimento_call: calcPercent(callsRealizadas, agendamentos),
+    pct_conversao_call: calcPercent(vendas, callsRealizadas),
+    sem_debriefing: !latest,
+  };
+}
+
+function applySort(rows: MentoriaWithMetrics[], sort: MentoriaSort | undefined) {
+  const copy = [...rows];
+  if (sort === "oldest") {
+    copy.sort(
+      (a, b) =>
+        new Date(a.scheduled_at).getTime() -
+        new Date(b.scheduled_at).getTime()
+    );
+  } else if (sort === "top_revenue") {
+    copy.sort((a, b) => b.valor_vendas - a.valor_vendas);
+  } else {
+    copy.sort(
+      (a, b) =>
+        new Date(b.scheduled_at).getTime() -
+        new Date(a.scheduled_at).getTime()
+    );
+  }
+  return copy;
+}
+
+export async function listMentorias(
+  supabase: SupabaseClient,
+  filters: MentoriaFilters = {}
+): Promise<MentoriaWithMetrics[]> {
+  let query = supabase
+    .from("mentorias")
+    .select(MENTORIA_SELECT)
+    .is("deleted_at", null);
+
+  if (filters.status && filters.status !== "all") {
+    query = query.eq("status", filters.status);
+  }
+
+  if (filters.query && filters.query.trim().length > 0) {
+    query = query.ilike("name", `%${filters.query.trim()}%`);
+  }
+
+  const { data, error } = await query.returns<MentoriaRow[]>();
+  if (error) throw error;
+
+  const mentorias = (data ?? []).map(toMentoriaDTO);
+  return applySort(mentorias, filters.sort);
+}
+
+export interface CreateMentoriaOptions {
+  actorId?: string;
+}
+
+export async function createMentoria(
+  supabase: SupabaseClient,
+  input: MentoriaCreateInput,
+  options: CreateMentoriaOptions = {}
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("mentorias")
+    .insert({
+      name: input.name,
+      scheduled_at: input.scheduled_at,
+      specialist_id: input.specialist_id,
+      traffic_budget: input.traffic_budget ?? null,
+      created_by: options.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
 }
