@@ -16,8 +16,17 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Bethel Motores",
-  description: "Plataforma modular de motores de crescimento da Bethel Systems",
+  title: {
+    default: "Bethel Motores",
+    template: "%s — Bethel Motores",
+  },
+  description:
+    "Plataforma modular de motores de crescimento da Bethel Systems",
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({

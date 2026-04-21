@@ -1,0 +1,124 @@
+import Link from "next/link";
+import { LineChart } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import {
+  PeriodFilter,
+  resolvePeriodFromSearchParams,
+  type PeriodSearchParams,
+} from "@/components/dashboard/PeriodFilter";
+import { createClient } from "@/lib/supabase/server";
+import { getMotorStats, type MotorStatsPayload } from "@/services/mentorias.service";
+import { formatDateBR } from "@/lib/utils/format";
+
+import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Motor de Mentorias" };
+
+interface PageProps {
+  searchParams: PeriodSearchParams;
+}
+
+function zeroStats(from: string, to: string): MotorStatsPayload {
+  const empty = {
+    activeMentorias: 0,
+    investment: 0,
+    revenue: 0,
+    base: 0,
+    trafficCapture: 0,
+  };
+  return {
+    range: { from, to },
+    previousRange: { from, to },
+    current: empty,
+    previous: empty,
+    deltas: {
+      investment: { value: 0, direction: "flat" },
+      revenue: { value: 0, direction: "flat" },
+      base: { value: 0, direction: "flat" },
+      trafficCapture: { value: 0, direction: "flat" },
+    },
+  };
+}
+
+export default async function MentoriasDashboardPage({ searchParams }: PageProps) {
+  const period = resolvePeriodFromSearchParams(searchParams);
+  const supabase = await createClient();
+
+  let stats: MotorStatsPayload;
+  try {
+    stats = await getMotorStats(supabase, period.range);
+  } catch (error) {
+    console.error("[/motors/mentorias]", error);
+    stats = zeroStats(period.range.from, period.range.to);
+  }
+
+  const { current, deltas } = stats;
+
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            Motor de Mentorias
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Período: {formatDateBR(period.range.from)} →{" "}
+            {formatDateBR(period.range.to)}
+          </p>
+        </div>
+        <PeriodFilter />
+      </header>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <MetricCard
+          label="Mentorias Ativas"
+          value={current.activeMentorias}
+          format="integer"
+        />
+        <MetricCard
+          label="Investimento Total"
+          value={current.investment}
+          format="currency"
+          delta={deltas.investment.value}
+        />
+        <MetricCard
+          label="Faturamento Total"
+          value={current.revenue}
+          format="currency"
+          delta={deltas.revenue.value}
+        />
+        <MetricCard
+          label="Base Total"
+          value={current.base}
+          format="integer"
+          delta={deltas.base.value}
+        />
+        <MetricCard
+          label="Captação Tráfego Total"
+          value={current.trafficCapture}
+          format="integer"
+          delta={deltas.trafficCapture.value}
+        />
+      </div>
+
+      <section className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card text-center text-sm text-muted-foreground">
+        <LineChart className="h-6 w-6" aria-hidden />
+        <p>Gráfico de evolução diária (investimento × faturamento)</p>
+        <p className="text-xs">Será conectado ao Recharts em task futura.</p>
+      </section>
+
+      <div className="flex flex-wrap gap-2">
+        <Button asChild>
+          <Link href="/motors/mentorias/listagem">Ver todas as mentorias</Link>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/motors/mentorias/comparar">Comparar mentorias</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
