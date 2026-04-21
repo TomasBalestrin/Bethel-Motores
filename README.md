@@ -1,36 +1,136 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bethel Motores
 
-## Getting Started
+Plataforma modular interna de motores de crescimento da Bethel Systems. Cada
+motor é uma frente de aquisição (Mentorias, Social Selling, …) com módulos e
+métricas próprias.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Next.js 14 (App Router) · TypeScript strict · Supabase (Postgres + RLS + Auth)
+· Tailwind · shadcn/ui · TanStack Query 5 · Zustand · React Hook Form + Zod ·
+`@supabase/ssr` · Recharts · @dnd-kit
+
+## Estrutura (compacta)
+
+```
+src/
+├── app/
+│   ├── (auth)/login, callback
+│   ├── (dashboard)/motors, settings, layout.tsx
+│   └── api/[domínio]/route.ts
+├── components/
+│   ├── ui/                    shadcn (copiado)
+│   ├── layout/                sidebar, header, breadcrumbs, ProtectedRoute
+│   ├── motors, mentorias, social-selling, dashboard,
+│   └── settings, users, goals, integrations, shared/
+├── hooks/                     useUser, useMentorias, useFunnels, useTasks …
+├── lib/
+│   ├── supabase/              client, server, admin, middleware
+│   ├── validators/            zod schemas isomórficos
+│   ├── utils/                 format, calc, date-range
+│   ├── auth/                  roles, guard
+│   └── integrations/          webhook-router, fluxon-adapter, meta-ads
+├── services/                  lógica de negócio (*.service.ts)
+├── stores/                    zustand (uiStore, periodStore)
+├── types/                     domain types
+└── middleware.ts              auth refresh + role gating
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Comandos
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev          # localhost:3000
+npm run build        # build de produção (rodar ao final de cada task)
+npm run lint         # eslint
+npm run lint:strict  # eslint --max-warnings 0
+npm run typecheck    # tsc --noEmit
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variáveis de ambiente
 
-## Learn More
+Copie `.env.local.example` para `.env.local` e preencha:
 
-To learn more about Next.js, take a look at the following resources:
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+SUPABASE_SERVICE_ROLE_KEY=      # APENAS em src/app/api/*
+SUPABASE_JWT_SECRET=
+WEBHOOK_SECRET_FLUXON=
+META_ADS_ACCESS_TOKEN=          # Fase 2
+META_ADS_ACCOUNT_ID=            # Fase 2
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`service_role` nunca entra no bundle do client — ESLint impede o import de
+`@/lib/supabase/admin` fora de `src/app/api/**`.
 
-## Deploy on Vercel
+## Supabase
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Migrations ficam em `supabase/migrations/NNN_*.sql` e são aplicadas
+manualmente pelo SQL Editor do Dashboard, nesta ordem:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+001_extensions_enums        006_goals_audit
+002_core_tables             007_rls_policies
+003_social_selling          008_triggers
+004_mentorias_funnels       009_views
+005_integrations            010_seed
+```
+
+## Autenticação & Autorização
+
+- Supabase Auth magic link (`@supabase/ssr`) — sem senhas
+- Middleware refresca cookies a cada request e faz role gating para
+  `/settings/users`, `/settings/goals`, `/settings/audit` (admin),
+  `/settings/integrations` e `/settings/funnel-templates` (admin/infra)
+- Role enforcement em 3 camadas: middleware → RLS no Postgres → `assertRole()`
+  em route handlers
+
+## Webhooks
+
+`POST /api/webhooks/[slug]` valida header `x-webhook-secret` com bcrypt,
+grava o evento cru em `integration_events`, aplica o `mapping` JSONB da
+fonte e registra snapshots em `mentoria_metrics` ou
+`funnel_metric_snapshots`. Eventos duplicados (mesmo `source_event_id`)
+retornam 200 sem reprocessar.
+
+## Checklist pré-deploy (docs/security.md §9)
+
+- [x] Zero `any` em TypeScript (`rg '\bany\b' src/ --type ts`)
+- [x] Zero `console.log` (`rg 'console\\.log' src/`)
+- [x] Todos route handlers com try/catch + `console.error("[ROTA]", …)`
+- [x] Validação Zod em toda mutation server-side
+- [x] `.env.local` no `.gitignore`; template em `.env.local.example`
+- [x] ESLint bloqueia import de `@/lib/supabase/admin` fora de
+      `src/app/api/`
+- [x] Middleware protege rotas admin/infra
+- [x] Security headers aplicados em `next.config.mjs`
+      (X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy)
+- [x] `robots.txt` com `Disallow: /` (app interno)
+- [ ] Rate limiting em `/login` e `/api/webhooks/*` (Fase 3 — Upstash Redis)
+- [x] Upload de análises restrito a `text/plain` ≤ 5MB (`post-analyses`
+      bucket + validação dupla no client)
+- [x] Toda tabela sensível tem RLS ativo (checar migration
+      `007_rls_policies.sql`)
+- [x] Mutations críticas (goals, user roles) gravam em `audit_logs`
+
+## Docs
+
+- `docs/briefing.md` — contexto e decisões
+- `docs/PRD.md` — requisitos, features, user stories
+- `docs/tech-stack.md` — escolhas de pacote + ADRs
+- `docs/architecture.md` — estrutura de pastas e padrões
+- `docs/schema.md` — SQL, enums, RLS, views, seed
+- `docs/security.md` — auth, permissões, validação
+- `docs/ux-flows.md` — fluxos de tela e padrões de interação
+- `docs/TASKS.md` — backlog sequencial
+
+## Fluxo de task
+
+1. Abrir `docs/TASKS.md` e localizar a task
+2. Ler os docs referenciados em **LER**
+3. Listar arquivos de CRIAR/EDITAR e respeitar **NÃO TOCAR**
+4. Escrever seguindo padrões dos arquivos LER
+5. `npm run build` deve passar ao final
+6. Commit + push na branch da feature
