@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Menu, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -17,7 +18,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { SidebarNavContent } from "./SidebarNavContent";
 
 function initialsFrom(name: string | null, email: string | null): string {
   if (name) {
@@ -32,6 +41,7 @@ function initialsFrom(name: string | null, email: string | null): string {
 export function AppHeader() {
   const router = useRouter();
   const { user, profile } = useUser();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -49,8 +59,41 @@ export function AppHeader() {
   const initials = initialsFrom(profile?.name ?? null, email);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4">
-      <Breadcrumbs />
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-background px-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label="Abrir menu"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            className="w-72 bg-surface p-0 text-surface-foreground"
+          >
+            <SheetHeader className="border-b border-border px-4 py-3 text-left">
+              <SheetTitle className="font-heading text-sm font-semibold">
+                Bethel Motores
+              </SheetTitle>
+            </SheetHeader>
+            <div
+              className="flex h-[calc(100%-49px)] flex-col"
+              onClick={() => setMobileOpen(false)}
+            >
+              <SidebarNavContent collapsed={false} />
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        <div className="min-w-0 truncate">
+          <Breadcrumbs />
+        </div>
+      </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
