@@ -612,3 +612,46 @@ export async function listDisparosByMentoria(
     .filter((row) => row.source?.slug === "fluxon")
     .map(toDisparoDTO);
 }
+
+export interface CompareResult {
+  ids: string[];
+  found: string[];
+  missing: string[];
+  mentorias: MentoriaWithMetrics[];
+}
+
+export async function compareByIds(
+  supabase: SupabaseClient,
+  ids: string[]
+): Promise<CompareResult> {
+  const uniqueIds = Array.from(new Set(ids));
+
+  const { data, error } = await supabase
+    .from("mentorias")
+    .select(MENTORIA_SELECT)
+    .in("id", uniqueIds)
+    .is("deleted_at", null)
+    .returns<MentoriaRow[]>();
+
+  if (error) throw error;
+
+  const mentoriasById = new Map<string, MentoriaWithMetrics>();
+  for (const row of data ?? []) {
+    mentoriasById.set(row.id, toMentoriaDTO(row));
+  }
+
+  const ordered: MentoriaWithMetrics[] = [];
+  const found: string[] = [];
+  const missing: string[] = [];
+  for (const id of uniqueIds) {
+    const dto = mentoriasById.get(id);
+    if (dto) {
+      ordered.push(dto);
+      found.push(id);
+    } else {
+      missing.push(id);
+    }
+  }
+
+  return { ids: uniqueIds, found, missing, mentorias: ordered };
+}
