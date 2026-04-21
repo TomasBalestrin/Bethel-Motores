@@ -4,7 +4,6 @@ export interface Post {
   code: string;
   link: string | null;
   post_type: string | null;
-  budget: number | null;
   is_fit: boolean;
   is_test: boolean;
   is_active: boolean;
