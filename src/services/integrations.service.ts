@@ -277,3 +277,48 @@ export async function touchSourceLastReceived(
     .update({ last_received_at: new Date().toISOString() })
     .eq("id", sourceId);
 }
+
+export interface RecentIntegrationEvent {
+  id: string;
+  status: "pending" | "processed" | "error" | "skipped";
+  received_at: string;
+  processed_at: string | null;
+  source_event_id: string | null;
+  error_message: string | null;
+  mentoria_id: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface SourceWithRecentEvents extends IntegrationSource {
+  recent_events: RecentIntegrationEvent[];
+}
+
+export async function getSourceWithRecentEvents(
+  supabase: SupabaseClient,
+  id: string,
+  limit = 10
+): Promise<SourceWithRecentEvents | null> {
+  const { data, error } = await supabase
+    .from("integration_sources")
+    .select(SOURCE_LIST_COLUMNS)
+    .eq("id", id)
+    .maybeSingle<IntegrationSource>();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const eventsResult = await supabase
+    .from("integration_events")
+    .select(
+      "id, status, received_at, processed_at, source_event_id, error_message, mentoria_id, payload"
+    )
+    .eq("source_id", id)
+    .order("received_at", { ascending: false })
+    .limit(limit)
+    .returns<RecentIntegrationEvent[]>();
+
+  return {
+    ...data,
+    recent_events: eventsResult.data ?? [],
+  };
+}
