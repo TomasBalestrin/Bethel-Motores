@@ -314,3 +314,94 @@ export async function createMentoria(
   if (error) throw error;
   return data;
 }
+
+const MENTORIA_DETAIL_SELECT = `
+  id,
+  name,
+  scheduled_at,
+  specialist_id,
+  traffic_budget,
+  status,
+  created_by,
+  created_at,
+  updated_at,
+  specialist:social_profiles!mentorias_specialist_id_fkey(id, name, slug),
+  funnels(id, name, template_id, created_at)
+`;
+
+interface MentoriaDetailRow {
+  id: string;
+  name: string;
+  scheduled_at: string;
+  specialist_id: string;
+  traffic_budget: number | null;
+  status: MentoriaStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  specialist: {
+    id: string;
+    name: string;
+    slug: string | null;
+  } | null;
+  funnels:
+    | {
+        id: string;
+        name: string;
+        template_id: string | null;
+        created_at: string;
+      }[]
+    | null;
+}
+
+export async function getMentoriaById(
+  supabase: SupabaseClient,
+  id: string
+) {
+  const { data, error } = await supabase
+    .from("mentorias")
+    .select(MENTORIA_DETAIL_SELECT)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle<MentoriaDetailRow>();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    scheduled_at: data.scheduled_at,
+    specialist_id: data.specialist_id,
+    traffic_budget: data.traffic_budget,
+    status: data.status,
+    created_by: data.created_by,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    specialist: data.specialist ?? null,
+    funnels: data.funnels ?? [],
+  };
+}
+
+export async function updateMentoria(
+  supabase: SupabaseClient,
+  id: string,
+  patch: Partial<{
+    name: string;
+    scheduled_at: string;
+    specialist_id: string;
+    traffic_budget: number | null;
+    status: MentoriaStatus;
+  }>
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("mentorias")
+    .update(patch)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}

@@ -1,9 +1,37 @@
-import type { MentoriaStatus } from "@/lib/validators/mentoria";
+import type {
+  MentoriaCreateInput,
+  MentoriaStatus,
+  MentoriaUpdateInput,
+} from "@/lib/validators/mentoria";
 
 export interface MentoriaSpecialist {
   id: string;
   name: string;
   slug: string | null;
+}
+
+export interface Mentoria {
+  id: string;
+  name: string;
+  scheduled_at: string;
+  specialist_id: string;
+  traffic_budget: number | null;
+  status: MentoriaStatus;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MentoriaFunnel {
+  id: string;
+  name: string;
+  template_id: string | null;
+  created_at: string;
+}
+
+export interface MentoriaDetail extends Mentoria {
+  specialist: MentoriaSpecialist | null;
+  funnels: MentoriaFunnel[];
 }
 
 export interface MentoriaWithMetrics {
@@ -34,3 +62,6 @@ export interface MentoriaFilters {
   status?: MentoriaStatus | "all";
   sort?: "recent" | "oldest" | "top_revenue";
 }
+
+export type MentoriaInput = MentoriaCreateInput;
+export type MentoriaUpdate = MentoriaUpdateInput;
