@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { getMotorStats } from "@/services/mentorias.service";
-import { resolvePeriodFromSearchParams } from "@/components/dashboard/PeriodFilter";
+import { resolvePeriodFromSearchParams } from "@/lib/utils/period";
 
 interface RouteParams {
   params: { slug: string };
