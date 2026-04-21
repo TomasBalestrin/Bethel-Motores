@@ -8,34 +8,51 @@ import {
   resolvePeriodFromSearchParams,
   type PeriodSearchParams,
 } from "@/components/dashboard/PeriodFilter";
+import { createClient } from "@/lib/supabase/server";
+import { getMotorStats, type MotorStatsPayload } from "@/services/mentorias.service";
+import { formatDateBR } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
-
-interface MentoriasStats {
-  activeMentorias: number;
-  totalInvestment: number;
-  totalRevenue: number;
-  totalBase: number;
-  totalTrafficCapture: number;
-}
-
-function zeroStats(): MentoriasStats {
-  return {
-    activeMentorias: 0,
-    totalInvestment: 0,
-    totalRevenue: 0,
-    totalBase: 0,
-    totalTrafficCapture: 0,
-  };
-}
 
 interface PageProps {
   searchParams: PeriodSearchParams;
 }
 
+function zeroStats(from: string, to: string): MotorStatsPayload {
+  const empty = {
+    activeMentorias: 0,
+    investment: 0,
+    revenue: 0,
+    base: 0,
+    trafficCapture: 0,
+  };
+  return {
+    range: { from, to },
+    previousRange: { from, to },
+    current: empty,
+    previous: empty,
+    deltas: {
+      investment: { value: 0, direction: "flat" },
+      revenue: { value: 0, direction: "flat" },
+      base: { value: 0, direction: "flat" },
+      trafficCapture: { value: 0, direction: "flat" },
+    },
+  };
+}
+
 export default async function MentoriasDashboardPage({ searchParams }: PageProps) {
   const period = resolvePeriodFromSearchParams(searchParams);
-  const stats = zeroStats();
+  const supabase = await createClient();
+
+  let stats: MotorStatsPayload;
+  try {
+    stats = await getMotorStats(supabase, period.range);
+  } catch (error) {
+    console.error("[/motors/mentorias]", error);
+    stats = zeroStats(period.range.from, period.range.to);
+  }
+
+  const { current, deltas } = stats;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
@@ -45,7 +62,8 @@ export default async function MentoriasDashboardPage({ searchParams }: PageProps
             Motor de Mentorias
           </h1>
           <p className="text-sm text-muted-foreground">
-            Período: {period.range.from} → {period.range.to}
+            Período: {formatDateBR(period.range.from)} →{" "}
+            {formatDateBR(period.range.to)}
           </p>
         </div>
         <PeriodFilter />
@@ -54,24 +72,32 @@ export default async function MentoriasDashboardPage({ searchParams }: PageProps
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Mentorias Ativas"
-          value={stats.activeMentorias}
+          value={current.activeMentorias}
           format="integer"
         />
         <MetricCard
           label="Investimento Total"
-          value={stats.totalInvestment}
+          value={current.investment}
           format="currency"
+          delta={deltas.investment.value}
         />
         <MetricCard
           label="Faturamento Total"
-          value={stats.totalRevenue}
+          value={current.revenue}
           format="currency"
+          delta={deltas.revenue.value}
         />
-        <MetricCard label="Base Total" value={stats.totalBase} format="integer" />
+        <MetricCard
+          label="Base Total"
+          value={current.base}
+          format="integer"
+          delta={deltas.base.value}
+        />
         <MetricCard
           label="Captação Tráfego Total"
-          value={stats.totalTrafficCapture}
+          value={current.trafficCapture}
           format="integer"
+          delta={deltas.trafficCapture.value}
         />
       </div>
 
