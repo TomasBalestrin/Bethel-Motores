@@ -80,6 +80,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/posts]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
