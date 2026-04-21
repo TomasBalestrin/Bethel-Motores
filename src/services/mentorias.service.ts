@@ -405,3 +405,94 @@ export async function updateMentoria(
   if (error) throw error;
   return data;
 }
+
+export interface TrafegoEntry {
+  id: string;
+  captured_at: string;
+  investimento_trafego: number;
+  investimento_api: number;
+  source: "manual" | "webhook" | "api";
+  captured_by: string | null;
+  responsavel_nome: string | null;
+  notes: string | null;
+}
+
+interface TrafegoRow {
+  id: string;
+  captured_at: string;
+  investimento_trafego: number | null;
+  investimento_api: number | null;
+  source: "manual" | "webhook" | "api";
+  captured_by: string | null;
+  captured_by_profile: { name: string | null } | null;
+}
+
+export async function listTrafegoByMentoria(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<TrafegoEntry[]> {
+  const { data, error } = await supabase
+    .from("mentoria_metrics")
+    .select(
+      `
+        id,
+        captured_at,
+        investimento_trafego,
+        investimento_api,
+        source,
+        captured_by,
+        captured_by_profile:user_profiles!mentoria_metrics_captured_by_fkey(name)
+      `
+    )
+    .eq("mentoria_id", mentoriaId)
+    .gt("investimento_trafego", 0)
+    .order("captured_at", { ascending: false })
+    .returns<TrafegoRow[]>();
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    captured_at: row.captured_at,
+    investimento_trafego: Number(row.investimento_trafego ?? 0),
+    investimento_api: Number(row.investimento_api ?? 0),
+    source: row.source,
+    captured_by: row.captured_by,
+    responsavel_nome: row.captured_by_profile?.name ?? null,
+    notes: null,
+  }));
+}
+
+export interface InsertTrafegoInput {
+  value: number;
+  capturedAt?: string;
+  actorId?: string | null;
+}
+
+export async function insertTrafegoEntry(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  input: InsertTrafegoInput
+): Promise<{ id: string }> {
+  const { data, error } = await supabase
+    .from("mentoria_metrics")
+    .insert({
+      mentoria_id: mentoriaId,
+      investimento_trafego: input.value,
+      investimento_api: 0,
+      leads_grupo: 0,
+      leads_ao_vivo: 0,
+      agendamentos: 0,
+      calls_realizadas: 0,
+      vendas: 0,
+      valor_vendas: 0,
+      valor_entrada: 0,
+      source: "manual",
+      captured_at: input.capturedAt ?? new Date().toISOString(),
+      captured_by: input.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
