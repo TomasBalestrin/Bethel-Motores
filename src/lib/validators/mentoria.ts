@@ -43,3 +43,23 @@ export const MENTORIA_SORT_OPTIONS = [
   "top_revenue",
 ] as const;
 export type MentoriaSort = (typeof MENTORIA_SORT_OPTIONS)[number];
+
+export const disparoManualSchema = z.object({
+  received_at: z
+    .string()
+    .min(1, "Informe data e horário")
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), {
+      message: "Data inválida",
+    }),
+  funnel_label: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : null))
+    .nullable(),
+  volume_sent: z.coerce.number().int().nonnegative(),
+  volume_delivered: z.coerce.number().int().nonnegative(),
+  cost: z.coerce.number().nonnegative(),
+});
+export type DisparoManualInput = z.infer<typeof disparoManualSchema>;

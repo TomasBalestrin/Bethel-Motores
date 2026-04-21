@@ -1,0 +1,105 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { createClient } from "@/lib/supabase/server";
+import { assertRole } from "@/lib/auth/guard";
+import { disparoManualSchema } from "@/lib/validators/mentoria";
+import {
+  deleteManualDisparo,
+  updateManualDisparo,
+} from "@/services/mentorias.service";
+
+interface RouteParams {
+  params: { eventId: string };
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    if (!isUuid(params.eventId)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const roleCheck = await assertRole(supabase, user.id, [
+      "admin",
+      "gestor_trafego",
+    ]);
+    if (!roleCheck.ok) {
+      return NextResponse.json({ error: roleCheck.error }, { status: 403 });
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body) {
+      return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
+    }
+
+    const parsed = disparoManualSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.format() },
+        { status: 400 }
+      );
+    }
+
+    await updateManualDisparo(
+      supabase,
+      params.eventId,
+      {
+        received_at: new Date(parsed.data.received_at).toISOString(),
+        funnel_label: parsed.data.funnel_label,
+        volume_sent: parsed.data.volume_sent,
+        volume_delivered: parsed.data.volume_delivered,
+        cost: parsed.data.cost,
+      },
+      { actorId: user.id }
+    );
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("[PATCH /api/disparos/[eventId]]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  try {
+    if (!isUuid(params.eventId)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const roleCheck = await assertRole(supabase, user.id, [
+      "admin",
+      "gestor_trafego",
+    ]);
+    if (!roleCheck.ok) {
+      return NextResponse.json({ error: roleCheck.error }, { status: 403 });
+    }
+
+    await deleteManualDisparo(supabase, params.eventId, { actorId: user.id });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("[DELETE /api/disparos/[eventId]]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
+}

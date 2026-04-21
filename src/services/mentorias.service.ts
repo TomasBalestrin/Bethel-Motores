@@ -645,6 +645,143 @@ export async function listDisparosByMentoria(
     .map(toDisparoDTO);
 }
 
+async function resolveFluxonSourceId(
+  supabase: SupabaseClient
+): Promise<string> {
+  const { data } = await supabase
+    .from("integration_sources")
+    .select("id")
+    .eq("slug", "fluxon")
+    .maybeSingle<{ id: string }>();
+
+  if (data?.id) return data.id;
+
+  const { data: inserted, error } = await supabase
+    .from("integration_sources")
+    .insert({
+      slug: "fluxon",
+      name: "Fluxon",
+      is_active: true,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return inserted.id;
+}
+
+export interface DisparoManualPayload {
+  received_at: string;
+  funnel_label: string | null;
+  volume_sent: number;
+  volume_delivered: number;
+  cost: number;
+}
+
+function buildDisparoPayload(input: DisparoManualPayload) {
+  return {
+    volume: input.volume_sent,
+    volume_sent: input.volume_sent,
+    volume_delivered: input.volume_delivered,
+    cost: input.cost,
+    funnel: input.funnel_label,
+    funnel_name: input.funnel_label,
+    source: "manual",
+  };
+}
+
+export async function createManualDisparo(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  input: DisparoManualPayload,
+  options: { actorId?: string | null } = {}
+): Promise<{ id: string }> {
+  const sourceId = await resolveFluxonSourceId(supabase);
+
+  const { data, error } = await supabase
+    .from("integration_events")
+    .insert({
+      source_id: sourceId,
+      mentoria_id: mentoriaId,
+      payload: buildDisparoPayload(input),
+      status: "processed",
+      source_event_id: null,
+      received_at: input.received_at,
+      processed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "disparo",
+    entityId: data.id,
+    changes: { after: { mentoria_id: mentoriaId, ...input } },
+  });
+
+  return data;
+}
+
+export async function updateManualDisparo(
+  supabase: SupabaseClient,
+  eventId: string,
+  input: DisparoManualPayload,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { data: before } = await supabase
+    .from("integration_events")
+    .select("payload, received_at")
+    .eq("id", eventId)
+    .maybeSingle<{
+      payload: Record<string, unknown> | null;
+      received_at: string;
+    }>();
+
+  const { error } = await supabase
+    .from("integration_events")
+    .update({
+      payload: buildDisparoPayload(input),
+      received_at: input.received_at,
+    })
+    .eq("id", eventId);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "disparo",
+    entityId: eventId,
+    changes: {
+      before: before ? (before as Record<string, unknown>) : null,
+      after: input as unknown as Record<string, unknown>,
+    },
+  });
+}
+
+export async function deleteManualDisparo(
+  supabase: SupabaseClient,
+  eventId: string,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { error } = await supabase
+    .from("integration_events")
+    .delete()
+    .eq("id", eventId);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "delete",
+    entityType: "disparo",
+    entityId: eventId,
+  });
+}
+
 export interface CompareResult {
   ids: string[];
   found: string[];

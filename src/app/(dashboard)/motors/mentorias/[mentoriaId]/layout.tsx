@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMentoriaById } from "@/services/mentorias.service";
 import { MentoriaHeader } from "@/components/mentorias/MentoriaHeader";
 import { MentoriaTabs } from "@/components/mentorias/MentoriaTabs";
+import { BreadcrumbLabel } from "@/components/layout/BreadcrumbLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export default async function MentoriaDetailLayout({
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
+      <BreadcrumbLabel
+        path={`/motors/mentorias/${mentoria.id}`}
+        label={mentoria.name}
+      />
       <MentoriaHeader mentoria={mentoria} />
       <MentoriaTabs mentoriaId={mentoria.id} />
       <div className="pt-2">{children}</div>
