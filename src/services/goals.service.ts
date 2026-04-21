@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GoalCreateInput, GoalScope, GoalUpdateInput } from "@/lib/validators/goal";
+import { logAudit } from "@/services/audit.service";
 
 export interface Goal {
   id: string;
@@ -57,30 +58,50 @@ export async function createGoal(
   input: GoalCreateInput,
   options: { actorId?: string } = {}
 ): Promise<{ id: string }> {
+  const row = {
+    scope_type: input.scope_type,
+    motor_id: input.scope_type === "motor" ? input.motor_id ?? null : null,
+    mentoria_id:
+      input.scope_type === "mentoria" ? input.mentoria_id ?? null : null,
+    metric_key: input.metric_key,
+    target_value: input.target_value,
+    period_year: input.period_year,
+    period_month: input.period_month,
+    created_by: options.actorId ?? null,
+  };
+
   const { data, error } = await supabase
     .from("goals")
-    .insert({
-      scope_type: input.scope_type,
-      motor_id: input.scope_type === "motor" ? input.motor_id : null,
-      mentoria_id: input.scope_type === "mentoria" ? input.mentoria_id : null,
-      metric_key: input.metric_key,
-      target_value: input.target_value,
-      period_year: input.period_year,
-      period_month: input.period_month,
-      created_by: options.actorId ?? null,
-    })
+    .insert(row)
     .select("id")
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "goal",
+    entityId: data.id,
+    changes: { after: row },
+  });
+
   return data;
 }
 
 export async function updateGoal(
   supabase: SupabaseClient,
   id: string,
-  patch: GoalUpdateInput
+  patch: GoalUpdateInput,
+  options: { actorId?: string } = {}
 ): Promise<{ id: string }> {
+  const { data: before } = await supabase
+    .from("goals")
+    .select(GOAL_COLUMNS)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle<Goal>();
+
   const { data, error } = await supabase
     .from("goals")
     .update(patch)
@@ -90,18 +111,48 @@ export async function updateGoal(
     .single<{ id: string }>();
 
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "goal",
+    entityId: id,
+    changes: {
+      before: before ? (before as unknown as Record<string, unknown>) : null,
+      after: patch as Record<string, unknown>,
+    },
+  });
+
   return data;
 }
 
 export async function softDeleteGoal(
   supabase: SupabaseClient,
-  id: string
+  id: string,
+  options: { actorId?: string } = {}
 ): Promise<void> {
+  const { data: before } = await supabase
+    .from("goals")
+    .select(GOAL_COLUMNS)
+    .eq("id", id)
+    .maybeSingle<Goal>();
+
   const { error } = await supabase
     .from("goals")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "delete",
+    entityType: "goal",
+    entityId: id,
+    changes: {
+      before: before ? (before as unknown as Record<string, unknown>) : null,
+      after: null,
+    },
+  });
 }
 
 export interface ScopeFilter {

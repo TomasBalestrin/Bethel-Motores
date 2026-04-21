@@ -99,7 +99,12 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const data = await updateGoal(supabase, parsed.data.id, parsed.data.patch);
+    const data = await updateGoal(
+      supabase,
+      parsed.data.id,
+      parsed.data.patch,
+      { actorId: user.id }
+    );
     return NextResponse.json({ data });
   } catch (error) {
     console.error("[PATCH /api/goals]", error);
@@ -132,7 +137,7 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
-    await softDeleteGoal(supabase, parsed.data.id);
+    await softDeleteGoal(supabase, parsed.data.id, { actorId: user.id });
     return NextResponse.json({ data: { id: parsed.data.id } });
   } catch (error) {
     console.error("[DELETE /api/goals]", error);

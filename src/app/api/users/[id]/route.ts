@@ -57,7 +57,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     if (parsed.data.role) {
-      const data = await updateUserRole(supabase, params.id, parsed.data.role);
+      const data = await updateUserRole(
+        supabase,
+        params.id,
+        parsed.data.role,
+        { actorId: user.id }
+      );
       return NextResponse.json({ data });
     }
 
@@ -68,12 +73,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           { status: 422 }
         );
       }
-      const data = await deactivateUser(supabase, params.id);
+      const data = await deactivateUser(supabase, params.id, {
+        actorId: user.id,
+      });
       return NextResponse.json({ data });
     }
 
     if (parsed.data.is_active === true) {
-      const data = await reactivateUser(supabase, params.id);
+      const data = await reactivateUser(supabase, params.id, {
+        actorId: user.id,
+      });
       return NextResponse.json({ data });
     }
 
