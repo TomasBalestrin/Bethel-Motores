@@ -322,3 +322,107 @@ export async function getSourceWithRecentEvents(
     recent_events: eventsResult.data ?? [],
   };
 }
+
+export interface MetaAdsMapping {
+  campaign_id: string;
+  target_type: "post" | "mentoria";
+  target_id: string;
+}
+
+export interface MetaAdsSyncResult {
+  applied: number;
+  skipped: string[];
+  insights_count: number;
+}
+
+export interface SyncMetaAdsSpendInput {
+  insights: {
+    campaign_id: string;
+    campaign_name: string;
+    spend: number;
+    reach: number;
+    impressions: number;
+    clicks: number;
+    date_start: string;
+    date_stop: string;
+  }[];
+  mappings: MetaAdsMapping[];
+  actorId?: string;
+}
+
+export async function syncMetaAdsSpend(
+  supabase: SupabaseClient,
+  input: SyncMetaAdsSpendInput
+): Promise<MetaAdsSyncResult> {
+  const mappingByCampaign = new Map<string, MetaAdsMapping>();
+  for (const mapping of input.mappings) {
+    mappingByCampaign.set(mapping.campaign_id, mapping);
+  }
+
+  const capturedAt = new Date().toISOString();
+  const postRows: Record<string, unknown>[] = [];
+  const mentoriaRows: Record<string, unknown>[] = [];
+  const skipped: string[] = [];
+
+  for (const insight of input.insights) {
+    const mapping = mappingByCampaign.get(insight.campaign_id);
+    if (!mapping) {
+      skipped.push(insight.campaign_id);
+      continue;
+    }
+
+    if (mapping.target_type === "post") {
+      postRows.push({
+        post_id: mapping.target_id,
+        investment: insight.spend,
+        spend: insight.spend,
+        reach: insight.reach,
+        impressions: insight.impressions,
+        clicks: insight.clicks,
+        followers_gained: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        saves: 0,
+        captured_at: capturedAt,
+        captured_by: input.actorId ?? null,
+      });
+    } else {
+      mentoriaRows.push({
+        mentoria_id: mapping.target_id,
+        investimento_trafego: insight.spend,
+        investimento_api: 0,
+        leads_grupo: 0,
+        leads_ao_vivo: 0,
+        agendamentos: 0,
+        calls_realizadas: 0,
+        vendas: 0,
+        valor_vendas: 0,
+        valor_entrada: 0,
+        source: "api",
+        captured_at: capturedAt,
+        captured_by: input.actorId ?? null,
+      });
+    }
+  }
+
+  let applied = 0;
+  if (postRows.length > 0) {
+    const { error } = await supabase.from("post_metrics").insert(postRows);
+    if (error) throw error;
+    applied += postRows.length;
+  }
+  if (mentoriaRows.length > 0) {
+    const { error } = await supabase
+      .from("mentoria_metrics")
+      .insert(mentoriaRows);
+    if (error) throw error;
+    applied += mentoriaRows.length;
+  }
+
+  return {
+    applied,
+    skipped,
+    insights_count: input.insights.length,
+  };
+}
