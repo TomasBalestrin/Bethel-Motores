@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBreadcrumbStore } from "@/stores/breadcrumbStore";
 
 const SEGMENT_LABELS: Record<string, string> = {
   motors: "Motores",
@@ -24,8 +25,12 @@ const SEGMENT_LABELS: Record<string, string> = {
   profile: "Perfil",
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function humanize(segment: string): string {
   if (SEGMENT_LABELS[segment]) return SEGMENT_LABELS[segment]!;
+  if (UUID_RE.test(segment)) return "Detalhes";
   return segment
     .replace(/-/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -33,6 +38,7 @@ function humanize(segment: string): string {
 
 export function Breadcrumbs() {
   const pathname = usePathname();
+  const overrides = useBreadcrumbStore((s) => s.labels);
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length === 0) return null;
@@ -43,7 +49,7 @@ export function Breadcrumbs() {
         {segments.map((segment, index) => {
           const href = "/" + segments.slice(0, index + 1).join("/");
           const isLast = index === segments.length - 1;
-          const label = humanize(segment);
+          const label = overrides[href] ?? humanize(segment);
 
           return (
             <li key={href} className="flex items-center gap-1">

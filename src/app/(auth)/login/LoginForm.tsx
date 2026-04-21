@@ -24,10 +24,10 @@ export function LoginForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isValid },
+    formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    mode: "onBlur",
+    mode: "onSubmit",
     defaultValues: { email: "", password: "" },
   });
 
@@ -109,11 +109,7 @@ export function LoginForm() {
         ) : null}
       </div>
 
-      <Button
-        type="submit"
-        className="w-full"
-        disabled={!isValid || submitting}
-      >
+      <Button type="submit" className="w-full" disabled={submitting}>
         {submitting ? (
           <>
             <Loader2 className="mr-1 h-4 w-4 animate-spin" />
