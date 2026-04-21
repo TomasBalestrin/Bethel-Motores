@@ -32,7 +32,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data });
   } catch (error) {
     console.error("[GET /api/posts]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
