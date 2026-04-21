@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/card";
 import { PostCreateModal } from "@/components/social-selling/PostCreateModal";
 import { PostsTable } from "@/components/social-selling/PostsTable";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: { profileSlug: string };
 }
@@ -19,10 +21,15 @@ export default async function CriativosPage({ params }: PageProps) {
   const profile = await getProfileBySlug(supabase, params.profileSlug);
   if (!profile) notFound();
 
-  const posts: ProfilePost[] = await listPostsByProfile(
-    supabase,
-    profile.id
-  ).catch(() => []);
+  let posts: ProfilePost[] = [];
+  try {
+    posts = await listPostsByProfile(supabase, profile.id);
+  } catch (error) {
+    console.error(
+      "[/motors/social-selling/[slug]/criativos] listPostsByProfile failed:",
+      error instanceof Error ? error.message : error
+    );
+  }
 
   return (
     <div className="space-y-4">
