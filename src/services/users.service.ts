@@ -83,3 +83,18 @@ export async function deactivateUser(
   if (error) throw error;
   return data;
 }
+
+export async function reactivateUser(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<UserProfile> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update({ is_active: true })
+    .eq("id", userId)
+    .select(USER_PROFILE_COLUMNS)
+    .single<UserProfile>();
+
+  if (error) throw error;
+  return data;
+}
