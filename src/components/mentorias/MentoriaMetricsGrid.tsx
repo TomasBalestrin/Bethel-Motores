@@ -1,12 +1,11 @@
-import { RefreshCcw } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { formatCurrency, formatDateTimeBR } from "@/lib/utils/format";
 import type { MentoriaWithMetrics } from "@/types/mentoria";
+import { MentoriaMetricsDrawer } from "./MentoriaMetricsDrawer";
 
 interface MentoriaMetricsGridProps {
+  mentoriaId: string;
   metrics: MentoriaWithMetrics | null;
 }
 
@@ -35,7 +34,10 @@ function zeroMetrics(): MentoriaWithMetrics {
   };
 }
 
-export function MentoriaMetricsGrid({ metrics }: MentoriaMetricsGridProps) {
+export function MentoriaMetricsGrid({
+  mentoriaId,
+  metrics,
+}: MentoriaMetricsGridProps) {
   const data = metrics ?? zeroMetrics();
   const investmentTotal = data.investimento_trafego + data.investimento_api;
 
@@ -50,10 +52,7 @@ export function MentoriaMetricsGrid({ metrics }: MentoriaMetricsGridProps) {
               : "Nenhuma snapshot registrada"}
           </p>
         </div>
-        <Button variant="outline" disabled>
-          <RefreshCcw className="mr-1 h-4 w-4" />
-          Atualizar métricas
-        </Button>
+        <MentoriaMetricsDrawer mentoriaId={mentoriaId} current={metrics} />
       </div>
 
       <Card className="flex flex-col gap-4">

@@ -14,7 +14,10 @@ export default async function MentoriaDashboardPage({ params }: PageProps) {
 
   return (
     <div className="space-y-8">
-      <MentoriaMetricsGrid metrics={metrics} />
+      <MentoriaMetricsGrid
+        mentoriaId={params.mentoriaId}
+        metrics={metrics}
+      />
       <FunnelSection mentoriaId={params.mentoriaId} />
     </div>
   );

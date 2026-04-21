@@ -655,3 +655,47 @@ export async function compareByIds(
 
   return { ids: uniqueIds, found, missing, mentorias: ordered };
 }
+
+export interface InsertMentoriaMetricsInput {
+  leads_grupo: number;
+  leads_ao_vivo: number;
+  agendamentos: number;
+  calls_realizadas: number;
+  vendas: number;
+  valor_vendas: number;
+  valor_entrada: number;
+  investimento_trafego: number;
+  investimento_api: number;
+}
+
+export async function insertMentoriaMetrics(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  input: InsertMentoriaMetricsInput,
+  options: { actorId?: string | null } = {}
+): Promise<{ id: string }> {
+  const row = {
+    mentoria_id: mentoriaId,
+    leads_grupo: input.leads_grupo,
+    leads_ao_vivo: input.leads_ao_vivo,
+    agendamentos: input.agendamentos,
+    calls_realizadas: input.calls_realizadas,
+    vendas: input.vendas,
+    valor_vendas: input.valor_vendas,
+    valor_entrada: input.valor_entrada,
+    investimento_trafego: input.investimento_trafego,
+    investimento_api: input.investimento_api,
+    source: "manual" as const,
+    captured_at: new Date().toISOString(),
+    captured_by: options.actorId ?? null,
+  };
+
+  const { data, error } = await supabase
+    .from("mentoria_metrics")
+    .insert(row)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+  return data;
+}
