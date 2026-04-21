@@ -12,7 +12,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getMotorStats, type MotorStatsPayload } from "@/services/mentorias.service";
 import { formatDateBR } from "@/lib/utils/format";
 
+import type { Metadata } from "next";
+
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Motor de Mentorias" };
 
 interface PageProps {
   searchParams: PeriodSearchParams;

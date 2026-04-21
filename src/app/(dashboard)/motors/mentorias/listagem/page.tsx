@@ -15,7 +15,11 @@ import { MentoriaFormModal } from "@/components/mentorias/MentoriaFormModal";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
 
+import type { Metadata } from "next";
+
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Listagem de Mentorias" };
 
 interface PageProps {
   searchParams: {

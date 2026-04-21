@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Plug } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -7,6 +8,8 @@ import { SourceCard } from "@/components/integrations/SourceCard";
 import { SourceCreateModal } from "@/components/integrations/SourceCreateModal";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Integrações" };
 
 export default async function IntegrationsPage() {
   const supabase = await createClient();

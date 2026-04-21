@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Plus, Workflow } from "lucide-react";
 
@@ -10,6 +11,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDateTimeBR } from "@/lib/utils/format";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Templates de Funil" };
 
 export default async function FunnelTemplatesPage() {
   const supabase = await createClient();

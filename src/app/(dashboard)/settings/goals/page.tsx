@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Target } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +9,8 @@ import { GoalCreateModal } from "@/components/goals/GoalCreateModal";
 import { GoalsTable } from "@/components/goals/GoalsTable";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Metas" };
 
 export default async function GoalsPage() {
   const supabase = await createClient();

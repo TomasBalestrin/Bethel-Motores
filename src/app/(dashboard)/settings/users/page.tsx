@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Users } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +9,8 @@ import { UserInviteModal } from "@/components/users/UserInviteModal";
 import { UsersTable } from "@/components/users/UsersTable";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Usuários" };
 
 export default async function UsersPage() {
   const supabase = await createClient();

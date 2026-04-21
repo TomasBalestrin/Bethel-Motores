@@ -5,7 +5,11 @@ import { listProfilesWithStats } from "@/services/social-profiles.service";
 import { ProfileSelectionCard } from "@/components/social-selling/ProfileSelectionCard";
 import { EmptyState } from "@/components/shared/EmptyState";
 
+import type { Metadata } from "next";
+
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Social Selling" };
 
 export default async function SocialSellingPage() {
   const supabase = await createClient();

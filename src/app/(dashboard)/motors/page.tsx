@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Layers } from "lucide-react";
 
@@ -8,6 +9,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { LoadingState } from "@/components/shared/LoadingState";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = { title: "Motores" };
 
 export default function MotorsPage() {
   return (
