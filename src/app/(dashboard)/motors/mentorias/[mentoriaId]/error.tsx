@@ -18,6 +18,7 @@ export default function MentoriaDetailError({
     <ErrorState
       title="Não foi possível carregar esta mentoria"
       description="Verifique se a mentoria ainda existe e tente novamente."
+      digest={error.digest}
       onReset={reset}
       backHref="/motors/mentorias/listagem"
       backLabel="Voltar para Listagem"

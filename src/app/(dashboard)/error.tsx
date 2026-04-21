@@ -24,6 +24,11 @@ export default function DashboardError({ error, reset }: DashboardErrorProps) {
         <p className="max-w-md text-sm text-muted-foreground">
           Não conseguimos carregar esta seção. Tente novamente em instantes.
         </p>
+        {error.digest ? (
+          <p className="pt-1 font-mono text-[11px] text-muted-foreground/70">
+            ref: {error.digest}
+          </p>
+        ) : null}
       </div>
       <Button onClick={reset} variant="default">
         <RotateCcw className="mr-2 h-4 w-4" />
