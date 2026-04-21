@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { LoginForm } from "./LoginForm";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Entrar — Bethel Motores",
@@ -13,11 +16,13 @@ export default function LoginPage() {
           Entrar no Bethel Motores
         </h1>
         <p className="text-sm text-muted-foreground">
-          Enviamos um link mágico para seu email
+          Acesse com seu email e senha
         </p>
       </header>
 
-      <LoginForm />
+      <Suspense fallback={null}>
+        <LoginForm />
+      </Suspense>
 
       <p className="text-center text-xs text-muted-foreground">
         Ao entrar você concorda com os termos de uso interno Bethel

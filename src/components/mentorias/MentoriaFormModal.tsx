@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -11,7 +12,10 @@ import {
   mentoriaCreateSchema,
   type MentoriaCreateInput,
 } from "@/lib/validators/mentoria";
-import { useCreateMentoria } from "@/hooks/useMentorias";
+import {
+  useCreateMentoria,
+  useUpdateMentoria,
+} from "@/hooks/useMentorias";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,21 +41,79 @@ interface Specialist {
   name: string;
 }
 
-export function MentoriaFormModal() {
-  const [open, setOpen] = useState(false);
+interface EditTarget {
+  id: string;
+  name: string;
+  scheduled_at: string;
+  specialist_id: string;
+  traffic_budget: number | null;
+}
+
+interface MentoriaFormModalProps {
+  mode?: "create" | "edit";
+  mentoria?: EditTarget;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function isoToDatetimeLocal(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function MentoriaFormModal({
+  mode = "create",
+  mentoria,
+  trigger,
+  open: openProp,
+  onOpenChange,
+}: MentoriaFormModalProps) {
+  const router = useRouter();
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
   const [loadingSpecialists, setLoadingSpecialists] = useState(false);
   const createMutation = useCreateMentoria();
+  const updateMutation = useUpdateMentoria();
+
+  const defaults: MentoriaCreateInput =
+    mode === "edit" && mentoria
+      ? {
+          name: mentoria.name,
+          scheduled_at: isoToDatetimeLocal(mentoria.scheduled_at),
+          specialist_id: mentoria.specialist_id,
+          traffic_budget: mentoria.traffic_budget,
+        }
+      : {
+          name: "",
+          scheduled_at: "",
+          specialist_id: "",
+          traffic_budget: null,
+        };
 
   const form = useForm<MentoriaCreateInput>({
     resolver: zodResolver(mentoriaCreateSchema),
-    defaultValues: {
-      name: "",
-      scheduled_at: "",
-      specialist_id: "",
-      traffic_budget: null,
-    },
+    defaultValues: defaults,
   });
+
+  function setOpen(next: boolean) {
+    if (isControlled) {
+      onOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  }
+
+  useEffect(() => {
+    if (open) form.reset(defaults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mentoria?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -78,35 +140,65 @@ export function MentoriaFormModal() {
   }, [open]);
 
   async function onSubmit(input: MentoriaCreateInput) {
+    const payload = {
+      name: input.name,
+      scheduled_at: new Date(input.scheduled_at).toISOString(),
+      specialist_id: input.specialist_id,
+      traffic_budget: input.traffic_budget ?? null,
+    };
+
     try {
-      await createMutation.mutateAsync({
-        ...input,
-        scheduled_at: new Date(input.scheduled_at).toISOString(),
-      });
-      toast.success("Mentoria criada");
+      if (mode === "edit" && mentoria) {
+        await updateMutation.mutateAsync({ id: mentoria.id, patch: payload });
+        toast.success("Mentoria atualizada");
+      } else {
+        await createMutation.mutateAsync(payload);
+        toast.success("Mentoria criada");
+      }
       form.reset();
       setOpen(false);
+      router.refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro desconhecido";
-      toast.error("Não foi possível criar a mentoria", { description: message });
+      const message =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error(
+        mode === "edit"
+          ? "Não foi possível salvar"
+          : "Não foi possível criar a mentoria",
+        { description: message }
+      );
     }
   }
 
-  const isSubmitting = form.formState.isSubmitting || createMutation.isPending;
+  const isSubmitting =
+    form.formState.isSubmitting ||
+    createMutation.isPending ||
+    updateMutation.isPending;
+
+  const defaultTrigger =
+    mode === "create" ? (
+      <Button>
+        <Plus className="mr-1 h-4 w-4" />
+        Nova Mentoria
+      </Button>
+    ) : null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-1 h-4 w-4" />
-          Nova Mentoria
-        </Button>
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      ) : defaultTrigger ? (
+        <DialogTrigger asChild>{defaultTrigger}</DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Nova Mentoria</DialogTitle>
+          <DialogTitle>
+            {mode === "edit" ? "Editar mentoria" : "Nova Mentoria"}
+          </DialogTitle>
           <DialogDescription>
-            Cadastre uma nova mentoria do motor.
+            {mode === "edit"
+              ? "Atualize os dados desta mentoria."
+              : "Cadastre uma nova mentoria do motor."}
           </DialogDescription>
         </DialogHeader>
 
@@ -200,6 +292,8 @@ export function MentoriaFormModal() {
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   Salvando...
                 </>
+              ) : mode === "edit" ? (
+                "Salvar alterações"
               ) : (
                 "Criar mentoria"
               )}

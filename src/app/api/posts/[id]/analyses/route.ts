@@ -3,7 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
 import { postAnalysisSchema } from "@/lib/validators/post";
-import { insertAnalysis } from "@/services/posts.service";
+import {
+  createSignedAnalysisUrl,
+  insertAnalysis,
+  listAnalyses,
+} from "@/services/posts.service";
 
 interface RouteParams {
   params: { id: string };
@@ -13,6 +17,39 @@ function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     value
   );
+}
+
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    if (!isUuid(params.id)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const analyses = await listAnalyses(supabase, params.id);
+
+    const data = await Promise.all(
+      analyses.map(async (entry) => {
+        if (entry.source !== "file" || !entry.file_url) return entry;
+        const signed = await createSignedAnalysisUrl(
+          supabase,
+          entry.file_url
+        );
+        return { ...entry, signed_url: signed };
+      })
+    );
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    console.error("[GET /api/posts/[id]/analyses]", error);
+    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {

@@ -96,7 +96,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const data = await updateMentoria(supabase, params.id, patch);
+    const data = await updateMentoria(supabase, params.id, patch, {
+      actorId: user.id,
+    });
     return NextResponse.json({ data });
   } catch (error) {
     console.error("[PATCH /api/mentorias/[id]]", error);
