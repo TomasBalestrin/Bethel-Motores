@@ -44,3 +44,56 @@ export async function getSocialProfile(
   if (error) throw error;
   return data;
 }
+
+export interface SocialProfileWithStats extends SocialProfileSummary {
+  active_posts: number;
+  followers: number | null;
+}
+
+interface ProfileWithCountsRow extends SocialProfileSummary {
+  posts: { count: number }[] | null;
+  latest_metric: { followers: number | null }[] | null;
+}
+
+export async function listProfilesWithStats(
+  supabase: SupabaseClient
+): Promise<SocialProfileWithStats[]> {
+  const { data, error } = await supabase
+    .from("social_profiles")
+    .select(
+      `
+        id,
+        slug,
+        name,
+        instagram_handle,
+        avatar_url,
+        is_active,
+        posts(count),
+        latest_metric:social_profile_metrics(followers)
+      `
+    )
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("name", { ascending: true })
+    .returns<ProfileWithCountsRow[]>();
+
+  if (error) {
+    const fallback = await listSocialProfiles(supabase);
+    return fallback.map((profile) => ({
+      ...profile,
+      active_posts: 0,
+      followers: null,
+    }));
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    instagram_handle: row.instagram_handle,
+    avatar_url: row.avatar_url,
+    is_active: row.is_active,
+    active_posts: row.posts?.[0]?.count ?? 0,
+    followers: row.latest_metric?.[0]?.followers ?? null,
+  }));
+}
