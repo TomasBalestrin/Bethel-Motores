@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -27,6 +28,9 @@ import { AuditDetailDrawer } from "./AuditDetailDrawer";
 
 interface AuditTableProps {
   entries: AuditEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
   entityTypes: string[];
   users: { id: string; name: string | null; email: string }[];
   initial: {
@@ -39,6 +43,9 @@ interface AuditTableProps {
 
 export function AuditTable({
   entries,
+  total,
+  page,
+  pageSize,
   entityTypes,
   users,
   initial,
@@ -52,15 +59,23 @@ export function AuditTable({
     [entityTypes]
   );
 
-  function pushParams(updates: Record<string, string | null>) {
+  function pushParams(
+    updates: Record<string, string | null>,
+    { resetPage = true }: { resetPage?: boolean } = {}
+  ) {
     const next = new URLSearchParams(searchParams.toString());
     for (const [key, value] of Object.entries(updates)) {
       if (value === null || value === "") next.delete(key);
       else next.set(key, value);
     }
+    if (resetPage) next.delete("page");
     const qs = next.toString();
     router.replace(qs ? `?${qs}` : "?", { scroll: false });
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(total, page * pageSize);
 
   return (
     <div className="space-y-3">
@@ -183,6 +198,47 @@ export function AuditTable({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-muted-foreground">
+        <span>
+          {total === 0
+            ? "Nenhum registro"
+            : `Exibindo ${rangeStart}–${rangeEnd} de ${total}`}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={page <= 1}
+            onClick={() =>
+              pushParams(
+                { page: page - 1 <= 1 ? null : String(page - 1) },
+                { resetPage: false }
+              )
+            }
+          >
+            Anterior
+          </Button>
+          <span className="tabular-nums">
+            Página {page} / {totalPages}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={page >= totalPages}
+            onClick={() =>
+              pushParams(
+                { page: String(page + 1) },
+                { resetPage: false }
+              )
+            }
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
 
       <AuditDetailDrawer

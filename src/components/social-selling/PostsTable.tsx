@@ -30,6 +30,7 @@ import {
   formatDateBR,
 } from "@/lib/utils/format";
 import type { ProfilePost } from "@/services/social-profiles.service";
+import { useDebounce } from "@/hooks/useDebounce";
 import { PostMetricsDrawer } from "./PostMetricsDrawer";
 import { PostAnalysisDrawer } from "./PostAnalysisDrawer";
 
@@ -62,8 +63,10 @@ export function PostsTable({ posts }: PostsTableProps) {
     [posts, optimistic]
   );
 
+  const debouncedQuery = useDebounce(query, 250);
+
   const filtered = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = debouncedQuery.trim().toLowerCase();
     return decorated.filter((post) => {
       if (filter === "fit" && !post.is_fit) return false;
       if (filter === "test" && !post.is_test) return false;
@@ -74,7 +77,7 @@ export function PostsTable({ posts }: PostsTableProps) {
         (post.link ?? "").toLowerCase().includes(term)
       );
     });
-  }, [decorated, query, filter]);
+  }, [decorated, debouncedQuery, filter]);
 
   async function patch(post: ProfilePost, body: Partial<ProfilePost>) {
     setOptimistic((prev) => ({

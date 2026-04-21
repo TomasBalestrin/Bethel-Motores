@@ -1,5 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
-import { listMentorias } from "@/services/mentorias.service";
+import { cachedGetMentoriaWithMetrics } from "@/services/mentorias.cached";
 import { MentoriaMetricsGrid } from "@/components/mentorias/MentoriaMetricsGrid";
 import { FunnelSection } from "@/components/mentorias/FunnelSection";
 
@@ -8,9 +7,9 @@ interface PageProps {
 }
 
 export default async function MentoriaDashboardPage({ params }: PageProps) {
-  const supabase = await createClient();
-  const mentorias = await listMentorias(supabase, {}).catch(() => []);
-  const metrics = mentorias.find((m) => m.id === params.mentoriaId) ?? null;
+  const metrics = await cachedGetMentoriaWithMetrics(params.mentoriaId).catch(
+    () => null
+  );
 
   return (
     <div className="space-y-8">

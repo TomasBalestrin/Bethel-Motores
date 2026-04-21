@@ -74,15 +74,18 @@ export function AppHeader() {
           </SheetTrigger>
           <SheetContent
             side="left"
-            className="w-72 bg-surface p-0 text-surface-foreground"
+            className="w-[260px] border-r border-accent/15 bg-primary p-0 text-primary-foreground"
           >
-            <SheetHeader className="border-b border-border px-4 py-3 text-left">
-              <SheetTitle className="font-heading text-sm font-semibold">
-                Bethel Motores
+            <SheetHeader className="border-b border-accent/15 px-7 py-4 text-left">
+              <SheetTitle className="font-heading text-lg font-bold tracking-tight text-white">
+                Bethel
+                <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[2px] text-accent">
+                  Motores
+                </span>
               </SheetTitle>
             </SheetHeader>
             <div
-              className="flex h-[calc(100%-49px)] flex-col"
+              className="flex h-[calc(100%-57px)] flex-col"
               onClick={() => setMobileOpen(false)}
             >
               <SidebarNavContent collapsed={false} />

@@ -30,6 +30,7 @@ export function SidebarNavItem({
   return (
     <Link
       href={href}
+      prefetch
       aria-current={isActive ? "page" : undefined}
       title={collapsed ? label : undefined}
       className={cn(

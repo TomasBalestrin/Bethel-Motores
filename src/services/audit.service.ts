@@ -69,6 +69,72 @@ interface AuditRow {
   user: { name: string | null; email: string | null } | null;
 }
 
+export interface AuditPage {
+  entries: AuditEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function listAuditPaginated(
+  supabase: SupabaseClient,
+  filters: AuditFilters = {},
+  page = 1,
+  pageSize = 50
+): Promise<AuditPage> {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.min(200, Math.max(10, Math.floor(pageSize)));
+  const from = (safePage - 1) * safeSize;
+  const to = from + safeSize - 1;
+
+  let query = supabase
+    .from("audit_logs")
+    .select(
+      `
+        id,
+        user_id,
+        action,
+        entity_type,
+        entity_id,
+        changes,
+        created_at,
+        user:user_profiles!audit_logs_user_id_fkey(name, email)
+      `,
+      { count: "exact" }
+    )
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (filters.entityType) query = query.eq("entity_type", filters.entityType);
+  if (filters.userId) query = query.eq("user_id", filters.userId);
+  if (filters.from)
+    query = query.gte("created_at", `${filters.from}T00:00:00.000Z`);
+  if (filters.to)
+    query = query.lte("created_at", `${filters.to}T23:59:59.999Z`);
+
+  const { data, error, count } = await query.returns<AuditRow[]>();
+  if (error) throw error;
+
+  const entries: AuditEntry[] = (data ?? []).map((row) => ({
+    id: row.id,
+    user_id: row.user_id,
+    user_name: row.user?.name ?? null,
+    user_email: row.user?.email ?? null,
+    action: row.action,
+    entity_type: row.entity_type,
+    entity_id: row.entity_id,
+    changes: row.changes,
+    created_at: row.created_at,
+  }));
+
+  return {
+    entries,
+    total: count ?? entries.length,
+    page: safePage,
+    pageSize: safeSize,
+  };
+}
+
 export async function listAudit(
   supabase: SupabaseClient,
   filters: AuditFilters = {}
