@@ -6,6 +6,7 @@ import { getUserProfile } from "@/services/users.service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PasswordChangeForm } from "@/components/users/PasswordChangeForm";
 import { ProfileForm } from "@/components/users/ProfileForm";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,16 @@ export default async function ProfilePage() {
 
       <Card className="p-6">
         <ProfileForm profile={profile} />
+      </Card>
+
+      <Card className="space-y-3 p-6">
+        <div className="space-y-1">
+          <h2 className="font-heading text-base font-semibold">Senha</h2>
+          <p className="text-xs text-muted-foreground">
+            Altere sua senha de acesso. Mínimo 8 caracteres.
+          </p>
+        </div>
+        <PasswordChangeForm />
       </Card>
     </div>
   );

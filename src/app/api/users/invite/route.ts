@@ -11,6 +11,7 @@ const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(255),
   role: z.enum(USER_ROLES),
   name: z.string().trim().max(120).optional(),
+  password: z.string().min(8).max(72).optional(),
 });
 
 export async function POST(request: NextRequest) {

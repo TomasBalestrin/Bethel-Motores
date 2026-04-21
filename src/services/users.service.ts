@@ -35,14 +35,40 @@ export interface InviteUserInput {
   email: string;
   role: UserRole;
   name?: string;
+  password?: string;
+}
+
+function generatePassword(length = 16): string {
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
+  const bytes = new Uint8Array(length);
+  if (typeof globalThis.crypto?.getRandomValues === "function") {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i += 1) {
+      bytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+}
+
+export interface InviteUserResult {
+  userId: string;
+  email: string;
+  password: string;
 }
 
 export async function inviteUser(
   admin: SupabaseClient,
   input: InviteUserInput
-): Promise<{ userId: string; email: string }> {
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(input.email, {
-    data: {
+): Promise<InviteUserResult> {
+  const password = input.password ?? generatePassword(16);
+
+  const { data, error } = await admin.auth.admin.createUser({
+    email: input.email,
+    password,
+    email_confirm: true,
+    user_metadata: {
       role: input.role,
       name: input.name ?? null,
     },
@@ -51,7 +77,24 @@ export async function inviteUser(
   if (error) throw error;
   if (!data.user) throw new Error("Convite não gerou usuário");
 
-  return { userId: data.user.id, email: data.user.email ?? input.email };
+  const userId = data.user.id;
+
+  await admin.from("user_profiles").upsert(
+    {
+      id: userId,
+      email: data.user.email ?? input.email,
+      name: input.name ?? null,
+      role: input.role,
+      is_active: true,
+    },
+    { onConflict: "id" }
+  );
+
+  return {
+    userId,
+    email: data.user.email ?? input.email,
+    password,
+  };
 }
 
 export async function updateUserRole(
@@ -171,4 +214,12 @@ export async function updateOwnProfile(
   });
 
   return data;
+}
+
+export async function updateOwnPassword(
+  supabase: SupabaseClient,
+  newPassword: string
+): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
 }

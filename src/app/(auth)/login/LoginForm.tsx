@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Loader2, Mail } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { loginSchema, type LoginInput } from "@/lib/validators/auth";
@@ -12,11 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Status = "idle" | "loading" | "success" | "error";
+type Status = "idle" | "loading";
 
 export function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -25,63 +28,34 @@ export function LoginForm() {
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     mode: "onBlur",
-    defaultValues: { email: "" },
+    defaultValues: { email: "", password: "" },
   });
 
-  async function onSubmit({ email }: LoginInput) {
+  async function onSubmit({ email, password }: LoginInput) {
     setStatus("loading");
     const supabase = createClient();
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      (typeof window !== "undefined" ? window.location.origin : "");
-
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: `${appUrl}/auth/callback`,
-      },
+      password,
     });
 
     if (error) {
-      setStatus("error");
-      toast.error("Não foi possível enviar o link", {
-        description: error.message,
+      setStatus("idle");
+      toast.error("Não foi possível entrar", {
+        description:
+          error.message === "Invalid login credentials"
+            ? "Email ou senha incorretos"
+            : error.message,
       });
       return;
     }
 
-    setSentTo(email);
-    setStatus("success");
-    toast.success("Link enviado", {
-      description: "Confira seu email para continuar",
-      duration: 5000,
-    });
+    const redirectTo = searchParams.get("redirectTo") ?? "/motors";
+    router.replace(redirectTo);
+    router.refresh();
   }
 
-  if (status === "success" && sentTo) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-6 text-center shadow-sm">
-        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <Mail className="h-5 w-5" />
-        </div>
-        <h2 className="font-heading text-lg font-semibold">Verifique seu email</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Enviamos um link para <span className="font-medium">{sentTo}</span>.
-          O link expira em 10 minutos.
-        </p>
-        <Button
-          variant="ghost"
-          className="mt-4"
-          onClick={() => {
-            setStatus("idle");
-            setSentTo(null);
-          }}
-        >
-          Usar outro email
-        </Button>
-      </div>
-    );
-  }
+  const submitting = status === "loading";
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
@@ -93,7 +67,7 @@ export function LoginForm() {
           autoComplete="email"
           placeholder="voce@bethel.com.br"
           aria-invalid={Boolean(errors.email)}
-          disabled={status === "loading"}
+          disabled={submitting}
           {...register("email")}
         />
         {errors.email ? (
@@ -103,18 +77,50 @@ export function LoginForm() {
         ) : null}
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor="password">Senha</Label>
+        <div className="relative">
+          <Input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            aria-invalid={Boolean(errors.password)}
+            disabled={submitting}
+            {...register("password")}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        {errors.password ? (
+          <p role="alert" className="text-xs text-destructive">
+            {errors.password.message}
+          </p>
+        ) : null}
+      </div>
+
       <Button
         type="submit"
         className="w-full"
-        disabled={!isValid || status === "loading"}
+        disabled={!isValid || submitting}
       >
-        {status === "loading" ? (
+        {submitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Enviando...
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            Entrando...
           </>
         ) : (
-          "Enviar link"
+          "Entrar"
         )}
       </Button>
     </form>
