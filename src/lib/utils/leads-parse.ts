@@ -3,6 +3,22 @@ import Papa from "papaparse";
 import type { LeadCreateInput } from "@/lib/validators/lead";
 import type { AttendanceEntry } from "@/services/leads.service";
 
+/**
+ * Lê um File como texto detectando encoding automaticamente.
+ * Tenta UTF-8 primeiro; se houver caracteres de substituição (U+FFFD),
+ * relê como Windows-1252 (padrão de exportação do Excel brasileiro).
+ */
+export async function readFileText(file: File): Promise<string> {
+  const utf8 = await file.text();
+  if (!utf8.includes("�")) return utf8;
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve((e.target?.result as string) ?? "");
+    reader.onerror = reject;
+    reader.readAsText(file, "windows-1252");
+  });
+}
+
 type LeadHeaderKey = "name" | "phone" | "instagram_handle" | "revenue" | "niche";
 
 // Match exato (rápido) depois de remover acentos/pontuação e lower.

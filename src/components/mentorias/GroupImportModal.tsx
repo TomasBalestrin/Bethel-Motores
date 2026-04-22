@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import {
   buildSheetsCsvUrl,
   parseAttendanceFromCsv,
+  readFileText,
 } from "@/lib/utils/leads-parse";
 import type { AttendanceEntry, AttendanceResult } from "@/services/leads.service";
 
@@ -89,7 +90,7 @@ export function GroupImportModal({
 
   async function handleFile(file: File) {
     try {
-      const text = await file.text();
+      const text = await readFileText(file);
       const parsed = parseAttendanceFromCsv(text);
       if (parsed.entries.length === 0) {
         toast.error("Nenhuma linha detectada", {
