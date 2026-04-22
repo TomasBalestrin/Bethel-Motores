@@ -7,8 +7,6 @@ import type {
   FunnelSnapshotInput,
 } from "@/lib/validators/funnel";
 import type {
-  Funnel,
-  FunnelFieldValue,
   FunnelTemplate,
   FunnelTemplateField,
   FunnelWithTemplate,
@@ -17,119 +15,18 @@ import type {
 export const FUNNELS_QUERY_KEY = ["funnels"] as const;
 export const FUNNEL_TEMPLATES_QUERY_KEY = ["funnel-templates"] as const;
 
-interface FunnelRow extends Funnel {
-  template:
-    | (Pick<FunnelTemplate, "id" | "name" | "description" | "is_default"> & {
-        fields: FunnelTemplateField[] | null;
-      })
-    | null;
-}
-
-interface CurrentValueRow {
-  funnel_id: string;
-  field_key: string;
-  value_numeric: number | null;
-  value_text: string | null;
-  source: FunnelFieldValue["source"];
-  captured_at: string;
-}
-
 export async function listFunnelsByMentoria(
   mentoriaId: string
 ): Promise<FunnelWithTemplate[]> {
-  const supabase = createClient();
-
-  const funnelsResult = await supabase
-    .from("funnels")
-    .select(
-      `
-        id,
-        name,
-        mentoria_id,
-        template_id,
-        list_url,
-        is_traffic_funnel,
-        is_active,
-        created_at,
-        template:funnel_templates(
-          id,
-          name,
-          description,
-          is_default,
-          fields:funnel_template_fields(
-            id,
-            field_key,
-            label,
-            field_type,
-            unit,
-            default_source,
-            display_order,
-            is_required,
-            is_aggregable
-          )
-        )
-      `
-    )
-    .eq("mentoria_id", mentoriaId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true })
-    .returns<FunnelRow[]>();
-
-  if (funnelsResult.error) throw funnelsResult.error;
-  const rows = funnelsResult.data ?? [];
-
-  const ids = rows.map((row) => row.id);
-  let valuesByFunnel = new Map<string, FunnelFieldValue[]>();
-
-  if (ids.length > 0) {
-    const valuesResult = await supabase
-      .from("v_funnels_current_values")
-      .select("funnel_id, field_key, value_numeric, value_text, source, captured_at")
-      .in("funnel_id", ids)
-      .returns<CurrentValueRow[]>();
-
-    if (!valuesResult.error && valuesResult.data) {
-      valuesByFunnel = valuesResult.data.reduce((map, row) => {
-        const arr = map.get(row.funnel_id) ?? [];
-        arr.push({
-          field_key: row.field_key,
-          value_numeric: row.value_numeric,
-          value_text: row.value_text,
-          source: row.source,
-          captured_at: row.captured_at,
-        });
-        map.set(row.funnel_id, arr);
-        return map;
-      }, new Map<string, FunnelFieldValue[]>());
-    }
+  const response = await fetch(`/api/mentorias/${mentoriaId}/funnels`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(
+      typeof body?.error === "string" ? body.error : "Erro ao carregar funis"
+    );
   }
-
-  return rows.map((row) => {
-    const template = row.template
-      ? {
-          id: row.template.id,
-          name: row.template.name,
-          description: row.template.description,
-          is_default: row.template.is_default,
-          fields: [...(row.template.fields ?? [])].sort(
-            (a, b) => a.display_order - b.display_order
-          ),
-        }
-      : null;
-
-    return {
-      id: row.id,
-      name: row.name,
-      mentoria_id: row.mentoria_id,
-      template_id: row.template_id,
-      list_url: row.list_url,
-      is_traffic_funnel: row.is_traffic_funnel,
-      is_active: row.is_active,
-      created_at: row.created_at,
-      template,
-      values: valuesByFunnel.get(row.id) ?? [],
-    };
-  });
+  const json = await response.json();
+  return (json.data ?? []) as FunnelWithTemplate[];
 }
 
 export async function listFunnelTemplates(): Promise<FunnelTemplate[]> {
