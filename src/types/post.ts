@@ -3,7 +3,6 @@ export interface Post {
   social_profile_id: string;
   code: string;
   link: string | null;
-  post_type: string | null;
   is_fit: boolean;
   is_test: boolean;
   is_active: boolean;

@@ -103,7 +103,6 @@ export interface ProfilePost {
   social_profile_id: string;
   code: string;
   link: string | null;
-  post_type: string | null;
   is_active: boolean;
   is_fit: boolean;
   is_test: boolean;
@@ -137,7 +136,6 @@ interface PostRow {
   social_profile_id: string;
   code: string;
   link: string | null;
-  post_type: string | null;
   is_active: boolean;
   is_fit: boolean;
   is_test: boolean;
@@ -173,7 +171,6 @@ function mapPostRow(row: PostRow): ProfilePost {
     social_profile_id: row.social_profile_id,
     code: row.code,
     link: row.link,
-    post_type: row.post_type,
     is_active: row.is_active,
     is_fit: row.is_fit,
     is_test: row.is_test,
@@ -221,7 +218,6 @@ export async function listPostsByProfile(
         social_profile_id,
         code,
         link,
-        post_type,
         is_active,
         is_fit,
         is_test,

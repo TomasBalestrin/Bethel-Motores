@@ -9,7 +9,7 @@ import type {
 import type { Post } from "@/types/post";
 
 const POST_COLUMNS =
-  "id, social_profile_id, code, link, post_type, is_fit, is_test, is_active, created_by, created_at, updated_at" as const;
+  "id, social_profile_id, code, link, is_fit, is_test, is_active, created_by, created_at, updated_at" as const;
 
 export async function listByProfile(
   supabase: SupabaseClient,
