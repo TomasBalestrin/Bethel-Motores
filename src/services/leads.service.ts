@@ -375,15 +375,6 @@ async function latestManualSnapshot(
   };
 }
 
-interface LeadAggregateRow {
-  joined_group: boolean;
-  attended: boolean;
-  scheduled: boolean;
-  sold: boolean;
-  sale_value: number | null;
-  entry_value: number | null;
-}
-
 export async function recalcMentoriaMetricsFromLeads(
   supabase: SupabaseClient,
   mentoriaId: string,
@@ -678,30 +669,6 @@ export const FUNNEL_DERIVED_FIELD_KEYS = [
   "valor_em_venda",
   "valor_de_entrada",
 ] as const;
-
-interface LeadAggregateSourceRow {
-  funnel_id: string;
-  joined_group: boolean;
-  confirmed_presence: boolean;
-  attended: boolean;
-  scheduled: boolean;
-  sold: boolean;
-  sale_value: number | null;
-  entry_value: number | null;
-}
-
-function emptyAggregates(): FunnelLeadAggregates {
-  return {
-    leads_do_funil: 0,
-    no_grupo: 0,
-    confirmaram: 0,
-    ao_vivo: 0,
-    agendados: 0,
-    vendas: 0,
-    valor_em_venda: 0,
-    valor_de_entrada: 0,
-  };
-}
 
 export async function aggregatesByFunnel(
   supabase: SupabaseClient,
