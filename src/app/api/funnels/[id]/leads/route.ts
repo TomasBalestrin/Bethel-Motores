@@ -5,6 +5,7 @@ import { assertRole } from "@/lib/auth/guard";
 import { leadCreateSchema } from "@/lib/validators/lead";
 import {
   createLead,
+  deleteAllLeadsByFunnel,
   listLeadsByFunnelPaginated,
 } from "@/services/leads.service";
 
@@ -98,6 +99,41 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/funnels/[id]/leads]", error);
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  try {
+    if (!isUuid(params.id)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const roleCheck = await assertRole(supabase, user.id, [
+      "admin",
+      "gestor_infra",
+    ]);
+    if (!roleCheck.ok) {
+      return NextResponse.json({ error: roleCheck.error }, { status: 403 });
+    }
+
+    await deleteAllLeadsByFunnel(supabase, params.id, { actorId: user.id });
+
+    return NextResponse.json({ data: { ok: true } });
+  } catch (error) {
+    console.error("[DELETE /api/funnels/[id]/leads]", error);
     const message =
       error && typeof error === "object" && "message" in error
         ? String((error as { message: unknown }).message)

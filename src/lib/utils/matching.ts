@@ -2,14 +2,19 @@ export function normalizePhone(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, "");
   if (digits.length < 8) return null;
+  if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55"))
+    return `+${digits}`;
   return digits;
 }
 
 function phoneKey(raw: string | null | undefined): string | null {
-  const digits = normalizePhone(raw);
-  if (!digits) return null;
+  const normalized = normalizePhone(raw);
+  if (!normalized) return null;
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length < 8) return null;
   // Usa os últimos 11 dígitos como chave para tolerar DDI 55 opcional
-  // (ex: "5511999990001" e "11999990001" viram a mesma chave).
+  // (ex: "+5511999990001" e "11999990001" viram a mesma chave).
   return digits.slice(-11);
 }
 

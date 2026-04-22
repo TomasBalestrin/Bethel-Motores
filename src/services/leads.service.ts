@@ -10,6 +10,7 @@ import { logAudit } from "@/services/audit.service";
 import {
   normalizeHandle,
   normalizeName,
+  normalizePhone,
   phoneIndexKey,
 } from "@/lib/utils/matching";
 
@@ -19,7 +20,7 @@ const LEAD_COLUMNS =
 function toRow(input: LeadCreateInput | LeadUpdateInput) {
   return {
     name: input.name,
-    phone: input.phone ?? null,
+    phone: normalizePhone(input.phone) ?? null,
     instagram_handle: input.instagram_handle ?? null,
     revenue: input.revenue ?? null,
     niche: input.niche ?? null,
@@ -395,6 +396,95 @@ export async function deleteLead(
       actorId: options.actorId ?? null,
     });
   }
+}
+
+export async function bulkDeleteLeads(
+  supabase: SupabaseClient,
+  funnelId: string,
+  ids: string[],
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { error } = await supabase
+    .from("mentoria_leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("funnel_id", funnelId)
+    .is("deleted_at", null);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "bulk_delete",
+    entityType: "lead",
+    entityId: funnelId,
+  });
+
+  const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, options);
+  }
+}
+
+export async function deleteAllLeadsByFunnel(
+  supabase: SupabaseClient,
+  funnelId: string,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { error } = await supabase
+    .from("mentoria_leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("funnel_id", funnelId)
+    .is("deleted_at", null);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "delete_all",
+    entityType: "lead",
+    entityId: funnelId,
+  });
+
+  const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, options);
+  }
+}
+
+export async function bulkDeleteLeadsAcrossFunnels(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  ids: string[],
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { data: funnelRows } = await supabase
+    .from("funnels")
+    .select("id")
+    .eq("mentoria_id", mentoriaId)
+    .is("deleted_at", null)
+    .returns<{ id: string }[]>();
+
+  const funnelIds = (funnelRows ?? []).map((f) => f.id);
+  if (funnelIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("mentoria_leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", ids)
+    .in("funnel_id", funnelIds)
+    .is("deleted_at", null);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "bulk_delete",
+    entityType: "lead",
+    entityId: mentoriaId,
+  });
+
+  await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, options);
 }
 
 interface LatestSnapshotManual {
