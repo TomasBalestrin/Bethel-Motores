@@ -70,3 +70,8 @@ export const attendanceBulkSchema = z.object({
   entries: z.array(attendanceEntrySchema).min(1).max(10_000),
 });
 export type AttendanceBulkInput = z.infer<typeof attendanceBulkSchema>;
+
+export const deleteBulkSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(10_000),
+});
+export type DeleteBulkInput = z.infer<typeof deleteBulkSchema>;

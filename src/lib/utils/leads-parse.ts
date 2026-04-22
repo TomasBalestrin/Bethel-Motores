@@ -2,6 +2,7 @@ import Papa from "papaparse";
 
 import type { LeadCreateInput } from "@/lib/validators/lead";
 import type { AttendanceEntry } from "@/services/leads.service";
+import { normalizePhone } from "@/lib/utils/matching";
 
 /**
  * Lê um File como texto detectando encoding automaticamente.
@@ -142,7 +143,7 @@ export function parseLeadsFromCsv(text: string): ParseResult {
       } else if (key === "name") {
         name = normalizeText(value) ?? "";
       } else if (key === "phone") {
-        phone = normalizeText(value);
+        phone = normalizePhone(value);
       } else if (key === "instagram_handle") {
         instagram = normalizeText(value);
       } else if (key === "niche") {
@@ -238,11 +239,15 @@ export function parseAttendanceFromCsv(text: string): AttendanceParseResult {
     let instagram: string | null = null;
     for (const [raw, key] of mapEntries) {
       const value = row[raw];
-      const text = normalizeText(value);
-      if (!text) continue;
-      if (key === "name") name = text;
-      else if (key === "phone") phone = text;
-      else if (key === "instagram_handle") instagram = text;
+      if (key === "phone") {
+        const p = normalizePhone(value);
+        if (p) phone = p;
+      } else {
+        const text = normalizeText(value);
+        if (!text) continue;
+        if (key === "name") name = text;
+        else if (key === "instagram_handle") instagram = text;
+      }
     }
     if (!name && !phone && !instagram) continue;
     entries.push({ name, phone, instagram_handle: instagram });

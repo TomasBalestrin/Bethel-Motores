@@ -27,14 +27,18 @@ interface LeadsTableProps {
   loading: boolean;
   onMutated: () => void;
   funnelNames?: Record<string, string>;
+  selectedIds?: Set<string>;
+  onSelectionChange?: (ids: Set<string>) => void;
 }
 
 const ROW_HEIGHT = 48;
 
 // Grid: nome | telefone | instagram | faturamento | nicho | 5 toggles | valor-venda | valor-entrada | ações
-const GRID_COLS =
+const BASE_GRID_COLS =
   "220px 140px 140px 110px 120px 82px 92px 110px 90px 72px 120px 120px 68px";
-const GRID_WIDTH = 1560;
+const BASE_GRID_WIDTH = 1560;
+const CHECKBOX_COL = "28px";
+const CHECKBOX_WIDTH = 28;
 
 type ToggleKey =
   | "joined_group"
@@ -137,12 +141,24 @@ function MoneyInlineInput({
 interface LeadRowProps {
   lead: Lead;
   funnelName?: string;
+  gridCols: string;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onPatched: (id: string, patch: Partial<Lead>) => void;
   onEdit: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
 }
 
-function LeadRow({ lead, funnelName, onPatched, onEdit, onDelete }: LeadRowProps) {
+function LeadRow({
+  lead,
+  funnelName,
+  gridCols,
+  selected,
+  onToggleSelect,
+  onPatched,
+  onEdit,
+  onDelete,
+}: LeadRowProps) {
   async function patch(body: Partial<Lead>) {
     const before: Partial<Lead> = {};
     for (const key of Object.keys(body) as (keyof Lead)[]) {
@@ -172,8 +188,17 @@ function LeadRow({ lead, funnelName, onPatched, onEdit, onDelete }: LeadRowProps
   return (
     <div
       className="grid items-center gap-2 border-b border-border px-3 text-xs hover:bg-muted/30"
-      style={{ gridTemplateColumns: GRID_COLS, height: ROW_HEIGHT }}
+      style={{ gridTemplateColumns: gridCols, height: ROW_HEIGHT }}
     >
+      {onToggleSelect !== undefined ? (
+        <input
+          type="checkbox"
+          checked={selected ?? false}
+          onChange={onToggleSelect}
+          aria-label={`Selecionar ${lead.name}`}
+          className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+        />
+      ) : null}
       <div className="min-w-0">
         <div className="truncate font-medium">{lead.name}</div>
         {funnelName ? (
@@ -238,7 +263,14 @@ function LeadRow({ lead, funnelName, onPatched, onEdit, onDelete }: LeadRowProps
   );
 }
 
-export function LeadsTable({ leads, loading, onMutated, funnelNames }: LeadsTableProps) {
+export function LeadsTable({
+  leads,
+  loading,
+  onMutated,
+  funnelNames,
+  selectedIds,
+  onSelectionChange,
+}: LeadsTableProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Lead>>>(
     {}
@@ -247,10 +279,42 @@ export function LeadsTable({ leads, loading, onMutated, funnelNames }: LeadsTabl
   const [deleting, setDeleting] = useState<Lead | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
+  const selectable = onSelectionChange !== undefined;
+  const gridCols = selectable
+    ? `${CHECKBOX_COL} ${BASE_GRID_COLS}`
+    : BASE_GRID_COLS;
+  const gridWidth = selectable
+    ? BASE_GRID_WIDTH + CHECKBOX_WIDTH
+    : BASE_GRID_WIDTH;
+
   const decorated = leads.map((lead) => ({
     ...lead,
     ...(optimistic[lead.id] ?? {}),
   }));
+
+  const allSelected =
+    decorated.length > 0 && decorated.every((l) => selectedIds?.has(l.id));
+  const someSelected =
+    !allSelected && decorated.some((l) => selectedIds?.has(l.id));
+
+  function toggleAll() {
+    if (!onSelectionChange) return;
+    const newIds = new Set(selectedIds ?? []);
+    if (allSelected) {
+      decorated.forEach((l) => newIds.delete(l.id));
+    } else {
+      decorated.forEach((l) => newIds.add(l.id));
+    }
+    onSelectionChange(newIds);
+  }
+
+  function toggleOne(id: string) {
+    if (!onSelectionChange) return;
+    const newIds = new Set(selectedIds ?? []);
+    if (newIds.has(id)) newIds.delete(id);
+    else newIds.add(id);
+    onSelectionChange(newIds);
+  }
 
   const virtualizer = useVirtualizer({
     count: decorated.length,
@@ -304,15 +368,27 @@ export function LeadsTable({ leads, loading, onMutated, funnelNames }: LeadsTabl
       className="relative overflow-auto"
       style={{ height: headerHeight + bodyHeight + 2 }}
     >
-      <div style={{ width: GRID_WIDTH, position: "relative" }}>
+      <div style={{ width: gridWidth, position: "relative" }}>
         <div
           className="sticky top-0 z-10 grid gap-2 border-b border-border bg-muted px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
           style={{
-            gridTemplateColumns: GRID_COLS,
+            gridTemplateColumns: gridCols,
             height: headerHeight,
             alignItems: "center",
           }}
         >
+          {selectable ? (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected;
+              }}
+              onChange={toggleAll}
+              aria-label="Selecionar todos"
+              className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+            />
+          ) : null}
           <span>Nome</span>
           <span>Telefone</span>
           <span>Instagram</span>
@@ -363,6 +439,9 @@ export function LeadsTable({ leads, loading, onMutated, funnelNames }: LeadsTabl
                   <LeadRow
                     lead={lead}
                     funnelName={funnelNames?.[lead.funnel_id]}
+                    gridCols={gridCols}
+                    selected={selectable ? (selectedIds?.has(lead.id) ?? false) : undefined}
+                    onToggleSelect={selectable ? () => toggleOne(lead.id) : undefined}
                     onPatched={handleOptimistic}
                     onEdit={setEditing}
                     onDelete={setDeleting}

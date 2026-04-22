@@ -2,11 +2,22 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Upload, UserCheck, Users } from "lucide-react";
+import { Plus, Search, Trash2, Upload, UserCheck, Users } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLeads, useInvalidateLeads } from "@/hooks/useLeads";
 import { LeadsTable } from "./LeadsTable";
@@ -38,6 +49,12 @@ export function LeadsPanel({
   const [importOpen, setImportOpen] = useState(false);
   const [attendanceOpen, setAttendanceOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
+  const [deleteSelectedBusy, setDeleteSelectedBusy] = useState(false);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState("");
+  const [deleteAllBusy, setDeleteAllBusy] = useState(false);
 
   const debouncedQuery = useDebounce(query, 300);
   const queryParam = debouncedQuery.trim();
@@ -67,6 +84,79 @@ export function LeadsPanel({
     router.refresh();
   }
 
+  function handlePageChange(newPage: number) {
+    setPage(newPage);
+    setSelectedIds(new Set());
+  }
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setPage(1);
+    setSelectedIds(new Set());
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedIds.size === 0) return;
+    setDeleteSelectedBusy(true);
+    try {
+      const response = await fetch(
+        `/api/funnels/${funnelId}/leads/delete-bulk`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        }
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Erro ao excluir"
+        );
+      }
+      toast.success(
+        selectedIds.size === 1
+          ? "1 lead excluído"
+          : `${selectedIds.size} leads excluídos`
+      );
+      setSelectedIds(new Set());
+      setDeleteSelectedOpen(false);
+      handleMutated();
+    } catch (error) {
+      toast.error("Não foi possível excluir", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setDeleteSelectedBusy(false);
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (deleteAllConfirm !== "EXCLUIR") return;
+    setDeleteAllBusy(true);
+    try {
+      const response = await fetch(`/api/funnels/${funnelId}/leads`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Erro ao excluir"
+        );
+      }
+      toast.success("Lista inteira excluída");
+      setSelectedIds(new Set());
+      setDeleteAllOpen(false);
+      setDeleteAllConfirm("");
+      handleMutated();
+    } catch (error) {
+      toast.error("Não foi possível excluir", {
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setDeleteAllBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -75,15 +165,22 @@ export function LeadsPanel({
           <Input
             type="search"
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
+            onChange={(event) => handleQueryChange(event.target.value)}
             placeholder="Buscar por nome, telefone, @ ou nicho"
             className="pl-8"
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          {selectedIds.size > 0 ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteSelectedOpen(true)}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              Excluir selecionados ({selectedIds.size})
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -108,6 +205,15 @@ export function LeadsPanel({
             <Plus className="mr-1 h-4 w-4" />
             Novo lead
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleteAllOpen(true)}
+            className="text-destructive hover:text-destructive"
+            title="Excluir lista inteira"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -122,6 +228,8 @@ export function LeadsPanel({
           leads={data?.entries ?? []}
           loading={isLoading && !data}
           onMutated={handleMutated}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
       </Card>
 
@@ -140,7 +248,7 @@ export function LeadsPanel({
             size="sm"
             variant="outline"
             disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => handlePageChange(Math.max(1, page - 1))}
           >
             Anterior
           </Button>
@@ -152,7 +260,7 @@ export function LeadsPanel({
             size="sm"
             variant="outline"
             disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
           >
             Próxima
           </Button>
@@ -190,6 +298,87 @@ export function LeadsPanel({
         onOpenChange={setGroupOpen}
         onSuccess={handleAttendanceMutated}
       />
+
+      {/* Confirmar exclusão de selecionados */}
+      <AlertDialog
+        open={deleteSelectedOpen}
+        onOpenChange={(next) => {
+          if (!next && !deleteSelectedBusy) setDeleteSelectedOpen(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir leads selecionados?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedIds.size === 1
+                ? "1 lead será excluído permanentemente."
+                : `${selectedIds.size} leads serão excluídos permanentemente.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSelectedBusy}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteSelected();
+              }}
+              disabled={deleteSelectedBusy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSelectedBusy ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmar exclusão de lista inteira */}
+      <AlertDialog
+        open={deleteAllOpen}
+        onOpenChange={(next) => {
+          if (!next && !deleteAllBusy) {
+            setDeleteAllOpen(false);
+            setDeleteAllConfirm("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lista inteira?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todos os {total} leads de <strong>{funnelName}</strong> serão
+              excluídos permanentemente. Para confirmar, digite{" "}
+              <strong>EXCLUIR</strong> abaixo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteAllConfirm}
+            onChange={(event) => setDeleteAllConfirm(event.target.value)}
+            placeholder="EXCLUIR"
+            className="mx-0 mt-1"
+            autoComplete="off"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={deleteAllBusy}
+              onClick={() => setDeleteAllConfirm("")}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteAll();
+              }}
+              disabled={deleteAllConfirm !== "EXCLUIR" || deleteAllBusy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteAllBusy ? "Excluindo..." : "Excluir tudo"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
