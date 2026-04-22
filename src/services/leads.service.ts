@@ -389,62 +389,30 @@ export async function recalcMentoriaMetricsFromLeads(
   mentoriaId: string,
   options: { actorId?: string | null } = {}
 ): Promise<void> {
-  const { data: funnels, error: funnelsError } = await supabase
-    .from("funnels")
-    .select("id")
-    .eq("mentoria_id", mentoriaId)
-    .is("deleted_at", null)
-    .returns<{ id: string }[]>();
-
-  if (funnelsError) return;
-
-  const funnelIds = (funnels ?? []).map((row) => row.id);
   const baseline = await latestManualSnapshot(supabase, mentoriaId);
 
-  let total_leads = 0;
-  let leads_grupo = 0;
-  let leads_ao_vivo = 0;
-  let agendamentos = 0;
-  let vendas = 0;
-  let valor_vendas = 0;
-  let valor_entrada = 0;
-
-  if (funnelIds.length > 0) {
-    const { data: leads, error: leadsError } = await supabase
-      .from("mentoria_leads")
-      .select(
-        "joined_group, attended, scheduled, sold, sale_value, entry_value"
-      )
-      .in("funnel_id", funnelIds)
-      .is("deleted_at", null)
-      .limit(100_000)
-      .returns<LeadAggregateRow[]>();
-
-    if (leadsError) return;
-
-    for (const lead of leads ?? []) {
-      total_leads += 1;
-      if (lead.joined_group) leads_grupo += 1;
-      if (lead.attended) leads_ao_vivo += 1;
-      if (lead.scheduled) agendamentos += 1;
-      if (lead.sold) {
-        vendas += 1;
-        valor_vendas += Number(lead.sale_value ?? 0);
-        valor_entrada += Number(lead.entry_value ?? 0);
-      }
-    }
-  }
+  const { data: stats } = await supabase
+    .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
+    .maybeSingle<{
+      total_leads: number;
+      leads_grupo: number;
+      leads_ao_vivo: number;
+      agendamentos: number;
+      vendas: number;
+      valor_vendas: number;
+      valor_entrada: number;
+    }>();
 
   const snapshot = {
     mentoria_id: mentoriaId,
-    total_leads,
-    leads_grupo,
-    leads_ao_vivo,
-    agendamentos,
+    total_leads: Number(stats?.total_leads ?? 0),
+    leads_grupo: Number(stats?.leads_grupo ?? 0),
+    leads_ao_vivo: Number(stats?.leads_ao_vivo ?? 0),
+    agendamentos: Number(stats?.agendamentos ?? 0),
     calls_realizadas: baseline.calls_realizadas,
-    vendas,
-    valor_vendas,
-    valor_entrada,
+    vendas: Number(stats?.vendas ?? 0),
+    valor_vendas: Number(stats?.valor_vendas ?? 0),
+    valor_entrada: Number(stats?.valor_entrada ?? 0),
     investimento_trafego: baseline.investimento_trafego,
     investimento_api: baseline.investimento_api,
     source: "manual" as const,
@@ -742,31 +710,37 @@ export async function aggregatesByFunnel(
   const map = new Map<string, FunnelLeadAggregates>();
   if (funnelIds.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from("mentoria_leads")
-    .select(
-      "funnel_id, joined_group, confirmed_presence, attended, scheduled, sold, sale_value, entry_value"
-    )
-    .in("funnel_id", funnelIds)
-    .is("deleted_at", null)
-    .limit(100_000)
-    .returns<LeadAggregateSourceRow[]>();
+  type AggRow = {
+    funnel_id: string;
+    leads_do_funil: number;
+    no_grupo: number;
+    confirmaram: number;
+    ao_vivo: number;
+    agendados: number;
+    vendas: number;
+    valor_em_venda: number;
+    valor_de_entrada: number;
+  };
+
+  const { data, error } = await supabase.rpc("get_funnel_lead_aggregates", {
+    funnel_ids: funnelIds,
+  });
 
   if (error || !data) return map;
 
-  for (const row of data) {
-    const agg = map.get(row.funnel_id) ?? emptyAggregates();
-    agg.leads_do_funil += 1;
-    if (row.joined_group) agg.no_grupo += 1;
-    if (row.confirmed_presence) agg.confirmaram += 1;
-    if (row.attended) agg.ao_vivo += 1;
-    if (row.scheduled) agg.agendados += 1;
-    if (row.sold) {
-      agg.vendas += 1;
-      agg.valor_em_venda += Number(row.sale_value ?? 0);
-      agg.valor_de_entrada += Number(row.entry_value ?? 0);
-    }
-    map.set(row.funnel_id, agg);
+  const rows = data as AggRow[];
+
+  for (const row of rows) {
+    map.set(row.funnel_id, {
+      leads_do_funil: Number(row.leads_do_funil),
+      no_grupo: Number(row.no_grupo),
+      confirmaram: Number(row.confirmaram),
+      ao_vivo: Number(row.ao_vivo),
+      agendados: Number(row.agendados),
+      vendas: Number(row.vendas),
+      valor_em_venda: Number(row.valor_em_venda),
+      valor_de_entrada: Number(row.valor_de_entrada),
+    });
   }
 
   return map;
