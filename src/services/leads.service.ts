@@ -586,6 +586,7 @@ export async function markAttendanceByMatching(
 export interface FunnelLeadAggregates {
   leads_do_funil: number;
   no_grupo: number;
+  confirmaram: number;
   ao_vivo: number;
   agendados: number;
   vendas: number;
@@ -596,6 +597,7 @@ export interface FunnelLeadAggregates {
 export const FUNNEL_DERIVED_FIELD_KEYS = [
   "leads_do_funil",
   "no_grupo",
+  "confirmaram",
   "ao_vivo",
   "agendados",
   "vendas",
@@ -606,6 +608,7 @@ export const FUNNEL_DERIVED_FIELD_KEYS = [
 interface LeadAggregateSourceRow {
   funnel_id: string;
   joined_group: boolean;
+  confirmed_presence: boolean;
   attended: boolean;
   scheduled: boolean;
   sold: boolean;
@@ -617,6 +620,7 @@ function emptyAggregates(): FunnelLeadAggregates {
   return {
     leads_do_funil: 0,
     no_grupo: 0,
+    confirmaram: 0,
     ao_vivo: 0,
     agendados: 0,
     vendas: 0,
@@ -634,7 +638,9 @@ export async function aggregatesByFunnel(
 
   const { data, error } = await supabase
     .from("mentoria_leads")
-    .select("funnel_id, joined_group, attended, scheduled, sold, sale_value, entry_value")
+    .select(
+      "funnel_id, joined_group, confirmed_presence, attended, scheduled, sold, sale_value, entry_value"
+    )
     .in("funnel_id", funnelIds)
     .is("deleted_at", null)
     .returns<LeadAggregateSourceRow[]>();
@@ -645,6 +651,7 @@ export async function aggregatesByFunnel(
     const agg = map.get(row.funnel_id) ?? emptyAggregates();
     agg.leads_do_funil += 1;
     if (row.joined_group) agg.no_grupo += 1;
+    if (row.confirmed_presence) agg.confirmaram += 1;
     if (row.attended) agg.ao_vivo += 1;
     if (row.scheduled) agg.agendados += 1;
     if (row.sold) {
