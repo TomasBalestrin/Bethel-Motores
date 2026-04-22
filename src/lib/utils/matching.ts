@@ -26,7 +26,10 @@ export function phoneIndexKey(raw: string | null | undefined): string | null {
 
 export function normalizeHandle(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  const cleaned = String(raw).trim().toLowerCase().replace(/^@+/, "");
+  let cleaned = String(raw).trim().toLowerCase().replace(/^@+/, "");
+  const atIndex = cleaned.indexOf("@");
+  if (atIndex > 0) cleaned = cleaned.slice(0, atIndex);
+  cleaned = cleaned.replace(/\s+/g, "");
   return cleaned.length > 0 ? cleaned : null;
 }
 
