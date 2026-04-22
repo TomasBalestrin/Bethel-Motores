@@ -32,7 +32,8 @@ const ROW_HEIGHT = 48;
 
 // Grid: nome | telefone | instagram | faturamento | nicho | 5 toggles | valor-venda | valor-entrada | ações
 const GRID_COLS =
-  "minmax(200px,1.2fr) 130px 130px 110px 120px 70px 80px 90px 85px 70px 120px 120px 68px";
+  "220px 140px 140px 110px 120px 82px 92px 110px 90px 72px 120px 120px 68px";
+const GRID_WIDTH = 1560;
 
 type ToggleKey =
   | "joined_group"
@@ -126,7 +127,7 @@ function MoneyInlineInput({
       }}
       disabled={disabled}
       placeholder={disabled ? "—" : "0,00"}
-      className="h-7 w-full px-2 text-xs tabular-nums"
+      className="h-7 w-full px-2 text-right text-xs tabular-nums"
       inputMode="decimal"
     />
   );
@@ -282,12 +283,26 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
     }
   }
 
+  const headerHeight = 36;
+  const bodyHeight = Math.min(
+    Math.max(decorated.length, 1) * ROW_HEIGHT,
+    12 * ROW_HEIGHT
+  );
+
   return (
-    <div className="overflow-x-auto">
-      <div style={{ minWidth: 1420 }}>
+    <div
+      ref={parentRef}
+      className="relative overflow-auto"
+      style={{ height: headerHeight + bodyHeight + 2 }}
+    >
+      <div style={{ width: GRID_WIDTH, position: "relative" }}>
         <div
-          className="grid gap-2 border-b border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
-          style={{ gridTemplateColumns: GRID_COLS }}
+          className="sticky top-0 z-10 grid gap-2 border-b border-border bg-muted px-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          style={{
+            gridTemplateColumns: GRID_COLS,
+            height: headerHeight,
+            alignItems: "center",
+          }}
         >
           <span>Nome</span>
           <span>Telefone</span>
@@ -299,8 +314,8 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
           <span className="text-center">Compareceu</span>
           <span className="text-center">Agendado</span>
           <span className="text-center">Venda</span>
-          <span className="text-center">Valor venda</span>
-          <span className="text-center">Valor entrada</span>
+          <span className="text-right">Valor venda</span>
+          <span className="text-right">Valor entrada</span>
           <span className="text-right">Ações</span>
         </div>
 
@@ -315,46 +330,36 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
           </div>
         ) : (
           <div
-            ref={parentRef}
-            className="relative overflow-y-auto"
             style={{
-              height: Math.min(
-                decorated.length * ROW_HEIGHT + 8,
-                ROW_HEIGHT * 12 + 8
-              ),
+              height: virtualizer.getTotalSize(),
+              position: "relative",
+              width: "100%",
             }}
           >
-            <div
-              style={{
-                height: virtualizer.getTotalSize(),
-                position: "relative",
-              }}
-            >
-              {virtualizer.getVirtualItems().map((virtualRow) => {
-                const lead = decorated[virtualRow.index];
-                if (!lead) return null;
-                return (
-                  <div
-                    key={lead.id}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                    }}
-                  >
-                    <LeadRow
-                      lead={lead}
-                      onPatched={handleOptimistic}
-                      onEdit={setEditing}
-                      onDelete={setDeleting}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const lead = decorated[virtualRow.index];
+              if (!lead) return null;
+              return (
+                <div
+                  key={lead.id}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <LeadRow
+                    lead={lead}
+                    onPatched={handleOptimistic}
+                    onEdit={setEditing}
+                    onDelete={setDeleting}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
