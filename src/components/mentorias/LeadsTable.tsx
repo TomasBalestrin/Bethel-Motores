@@ -28,14 +28,11 @@ interface LeadsTableProps {
   onMutated: () => void;
 }
 
-const ROW_HEIGHT = 56;
-const TOGGLES: { key: ToggleKey; short: string; label: string }[] = [
-  { key: "joined_group", short: "Grupo", label: "Entrou no grupo" },
-  { key: "confirmed_presence", short: "Presença", label: "Confirmou presença" },
-  { key: "attended", short: "Compareceu", label: "Compareceu" },
-  { key: "scheduled", short: "Agendado", label: "Agendado" },
-  { key: "sold", short: "Venda", label: "Venda" },
-];
+const ROW_HEIGHT = 48;
+
+// Grid: nome | telefone | instagram | faturamento | nicho | 5 toggles | valor-venda | valor-entrada | ações
+const GRID_COLS =
+  "minmax(200px,1.2fr) 130px 130px 110px 120px 70px 80px 90px 85px 70px 120px 120px 68px";
 
 type ToggleKey =
   | "joined_group"
@@ -43,6 +40,14 @@ type ToggleKey =
   | "attended"
   | "scheduled"
   | "sold";
+
+const TOGGLES: { key: ToggleKey; label: string; title: string }[] = [
+  { key: "joined_group", label: "Grupo", title: "Entrou no grupo" },
+  { key: "confirmed_presence", label: "Presença", title: "Confirmou presença" },
+  { key: "attended", label: "Compareceu", title: "Compareceu" },
+  { key: "scheduled", label: "Agendado", title: "Agendado" },
+  { key: "sold", label: "Venda", title: "Venda" },
+];
 
 function parseMoney(raw: string): number | null {
   if (!raw) return null;
@@ -54,71 +59,74 @@ function parseMoney(raw: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function ToggleButton({
+function formatMoneyInput(value: number | null): string {
+  if (value == null) return "";
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function ToggleCell({
   active,
   onClick,
   label,
-  short,
+  title,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
-  short: string;
+  title: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      aria-label={label}
+      title={title}
       className={cn(
-        "inline-flex h-7 items-center justify-center rounded-full px-2.5 text-[11px] font-medium transition-colors",
+        "inline-flex h-7 w-full items-center justify-center rounded-full text-[11px] font-medium transition-colors",
         active
           ? "bg-primary text-primary-foreground"
           : "bg-muted text-muted-foreground hover:bg-muted/70"
       )}
     >
-      {short}
+      {label}
     </button>
   );
 }
 
 function MoneyInlineInput({
-  defaultValue,
+  lead,
+  field,
   onCommit,
-  placeholder,
 }: {
-  defaultValue: number | null;
+  lead: Lead;
+  field: "sale_value" | "entry_value";
   onCommit: (value: number | null) => void;
-  placeholder: string;
 }) {
-  const initial =
-    defaultValue == null
-      ? ""
-      : defaultValue.toLocaleString("pt-BR", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        });
-  const [value, setValue] = useState(initial);
+  const current = lead[field];
+  const [value, setValue] = useState(formatMoneyInput(current));
+  const disabled = !lead.sold;
 
   function commit() {
     const parsed = parseMoney(value);
-    if (parsed === defaultValue) return;
+    if (parsed === current) return;
     onCommit(parsed);
   }
 
   return (
     <Input
-      value={value}
+      value={disabled ? "" : value}
       onChange={(event) => setValue(event.target.value)}
+      onFocus={() => setValue(formatMoneyInput(current))}
       onBlur={commit}
       onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          (event.target as HTMLInputElement).blur();
-        }
+        if (event.key === "Enter") (event.target as HTMLInputElement).blur();
       }}
-      placeholder={placeholder}
-      className="h-7 w-24 px-2 text-xs tabular-nums"
+      disabled={disabled}
+      placeholder={disabled ? "—" : "0,00"}
+      className="h-7 w-full px-2 text-xs tabular-nums"
       inputMode="decimal"
     />
   );
@@ -133,6 +141,10 @@ interface LeadRowProps {
 
 function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
   async function patch(body: Partial<Lead>) {
+    const before: Partial<Lead> = {};
+    for (const key of Object.keys(body) as (keyof Lead)[]) {
+      (before as Record<string, unknown>)[key] = lead[key];
+    }
     onPatched(lead.id, body);
     try {
       const response = await fetch(`/api/leads/${lead.id}`, {
@@ -150,57 +162,50 @@ function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
       const message =
         error instanceof Error ? error.message : "Erro desconhecido";
       toast.error("Não foi possível salvar", { description: message });
-      onPatched(lead.id, {
-        joined_group: lead.joined_group,
-        confirmed_presence: lead.confirmed_presence,
-        attended: lead.attended,
-        scheduled: lead.scheduled,
-        sold: lead.sold,
-        sale_value: lead.sale_value,
-        entry_value: lead.entry_value,
-      });
+      onPatched(lead.id, before);
     }
   }
 
   return (
-    <div className="grid grid-cols-[220px_140px_140px_120px_140px_1fr_80px] items-center gap-3 border-b border-border px-3 text-xs">
+    <div
+      className="grid items-center gap-2 border-b border-border px-3 text-xs hover:bg-muted/30"
+      style={{ gridTemplateColumns: GRID_COLS, height: ROW_HEIGHT }}
+    >
       <div className="truncate font-medium">{lead.name}</div>
       <div className="truncate text-muted-foreground">{lead.phone ?? "—"}</div>
       <div className="truncate text-muted-foreground">
-        {lead.instagram_handle ? `@${lead.instagram_handle.replace(/^@/, "")}` : "—"}
+        {lead.instagram_handle
+          ? `@${lead.instagram_handle.replace(/^@/, "")}`
+          : "—"}
       </div>
       <div className="text-right tabular-nums text-muted-foreground">
         {lead.revenue == null ? "—" : formatCurrency(lead.revenue)}
       </div>
       <div className="truncate text-muted-foreground">{lead.niche ?? "—"}</div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {TOGGLES.map((toggle) => (
-          <ToggleButton
-            key={toggle.key}
-            active={Boolean(lead[toggle.key])}
-            short={toggle.short}
-            label={toggle.label}
-            onClick={() => patch({ [toggle.key]: !lead[toggle.key] } as Partial<Lead>)}
-          />
-        ))}
-        {lead.sold ? (
-          <>
-            <MoneyInlineInput
-              key={`sale-${lead.id}-${lead.sale_value ?? "null"}`}
-              defaultValue={lead.sale_value}
-              placeholder="Venda"
-              onCommit={(value) => patch({ sale_value: value })}
-            />
-            <MoneyInlineInput
-              key={`entry-${lead.id}-${lead.entry_value ?? "null"}`}
-              defaultValue={lead.entry_value}
-              placeholder="Entrada"
-              onCommit={(value) => patch({ entry_value: value })}
-            />
-          </>
-        ) : null}
-      </div>
-      <div className="flex justify-end gap-1">
+      {TOGGLES.map((toggle) => (
+        <ToggleCell
+          key={toggle.key}
+          active={Boolean(lead[toggle.key])}
+          label={toggle.label}
+          title={toggle.title}
+          onClick={() =>
+            patch({ [toggle.key]: !lead[toggle.key] } as Partial<Lead>)
+          }
+        />
+      ))}
+      <MoneyInlineInput
+        key={`sale-${lead.id}-${lead.sold ? 1 : 0}-${lead.sale_value ?? "null"}`}
+        lead={lead}
+        field="sale_value"
+        onCommit={(value) => patch({ sale_value: value })}
+      />
+      <MoneyInlineInput
+        key={`entry-${lead.id}-${lead.sold ? 1 : 0}-${lead.entry_value ?? "null"}`}
+        lead={lead}
+        field="entry_value"
+        onCommit={(value) => patch({ entry_value: value })}
+      />
+      <div className="flex justify-end gap-0.5">
         <Button
           size="icon-sm"
           variant="ghost"
@@ -225,9 +230,9 @@ function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
 
 export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
-  const [optimistic, setOptimistic] = useState<
-    Record<string, Partial<Lead>>
-  >({});
+  const [optimistic, setOptimistic] = useState<Record<string, Partial<Lead>>>(
+    {}
+  );
   const [editing, setEditing] = useState<Lead | null>(null);
   const [deleting, setDeleting] = useState<Lead | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -278,65 +283,81 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
   }
 
   return (
-    <div>
-      <div className="grid grid-cols-[220px_140px_140px_120px_140px_1fr_80px] gap-3 border-b border-border bg-muted/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-        <span>Nome</span>
-        <span>Telefone</span>
-        <span>Instagram</span>
-        <span className="text-right">Faturamento</span>
-        <span>Nicho</span>
-        <span>Status / Valores</span>
-        <span className="text-right">Ações</span>
-      </div>
-
-      {loading ? (
-        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Carregando leads...
-        </div>
-      ) : decorated.length === 0 ? (
-        <div className="py-8 text-center text-sm text-muted-foreground">
-          Nenhum lead cadastrado neste funil.
-        </div>
-      ) : (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: 1420 }}>
         <div
-          ref={parentRef}
-          className="relative overflow-auto"
-          style={{ height: Math.min(600, decorated.length * ROW_HEIGHT + 8) }}
+          className="grid gap-2 border-b border-border bg-muted/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+          style={{ gridTemplateColumns: GRID_COLS }}
         >
+          <span>Nome</span>
+          <span>Telefone</span>
+          <span>Instagram</span>
+          <span className="text-right">Faturamento</span>
+          <span>Nicho</span>
+          <span className="text-center">Grupo</span>
+          <span className="text-center">Presença</span>
+          <span className="text-center">Compareceu</span>
+          <span className="text-center">Agendado</span>
+          <span className="text-center">Venda</span>
+          <span className="text-center">Valor venda</span>
+          <span className="text-center">Valor entrada</span>
+          <span className="text-right">Ações</span>
+        </div>
+
+        {loading ? (
+          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Carregando leads...
+          </div>
+        ) : decorated.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            Nenhum lead cadastrado neste funil.
+          </div>
+        ) : (
           <div
+            ref={parentRef}
+            className="relative overflow-y-auto"
             style={{
-              height: virtualizer.getTotalSize(),
-              position: "relative",
+              height: Math.min(
+                decorated.length * ROW_HEIGHT + 8,
+                ROW_HEIGHT * 12 + 8
+              ),
             }}
           >
-            {virtualizer.getVirtualItems().map((virtualRow) => {
-              const lead = decorated[virtualRow.index];
-              if (!lead) return null;
-              return (
-                <div
-                  key={lead.id}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  <LeadRow
-                    lead={lead}
-                    onPatched={handleOptimistic}
-                    onEdit={setEditing}
-                    onDelete={setDeleting}
-                  />
-                </div>
-              );
-            })}
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const lead = decorated[virtualRow.index];
+                if (!lead) return null;
+                return (
+                  <div
+                    key={lead.id}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <LeadRow
+                      lead={lead}
+                      onPatched={handleOptimistic}
+                      onEdit={setEditing}
+                      onDelete={setDeleting}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {editing ? (
         <LeadFormModal
@@ -389,4 +410,3 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
     </div>
   );
 }
-
