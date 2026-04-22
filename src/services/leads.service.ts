@@ -416,6 +416,7 @@ export async function recalcMentoriaMetricsFromLeads(
       )
       .in("funnel_id", funnelIds)
       .is("deleted_at", null)
+      .limit(100_000)
       .returns<LeadAggregateRow[]>();
 
     if (leadsError) return;
@@ -468,7 +469,6 @@ interface LeadMatchRow {
   name: string;
   phone: string | null;
   instagram_handle: string | null;
-  attended: boolean;
 }
 
 function pushToIndex<K, V>(map: Map<K, V[]>, key: K, value: V) {
@@ -502,7 +502,7 @@ export async function markAttendanceByMatching(
 
   const { data: leads, error: leadsError } = await supabase
     .from("mentoria_leads")
-    .select("id, name, phone, instagram_handle, attended")
+    .select("id, name, phone, instagram_handle")
     .in("funnel_id", funnelIds)
     .is("deleted_at", null)
     .limit(10_000)
@@ -560,6 +560,109 @@ export async function markAttendanceByMatching(
     userId: options.actorId ?? null,
     action: "update",
     entityType: "lead_attendance_bulk",
+    entityId: mentoriaId,
+    changes: {
+      meta: {
+        matched: ids.length,
+        notMatched: notMatched.length,
+        totalEntries: entries.length,
+      },
+    },
+  });
+
+  if (ids.length > 0) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+      actorId: options.actorId ?? null,
+    });
+  }
+
+  return {
+    matched: ids.length,
+    updatedLeadIds: ids,
+    notMatched,
+  };
+}
+
+export async function markGroupByMatching(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  entries: AttendanceEntry[],
+  options: { actorId?: string | null } = {}
+): Promise<AttendanceResult> {
+  const { data: funnels, error: funnelsError } = await supabase
+    .from("funnels")
+    .select("id")
+    .eq("mentoria_id", mentoriaId)
+    .is("deleted_at", null)
+    .returns<{ id: string }[]>();
+
+  if (funnelsError) throw funnelsError;
+  const funnelIds = (funnels ?? []).map((row) => row.id);
+
+  if (funnelIds.length === 0) {
+    return { matched: 0, updatedLeadIds: [], notMatched: entries };
+  }
+
+  const { data: leads, error: leadsError } = await supabase
+    .from("mentoria_leads")
+    .select("id, name, phone, instagram_handle")
+    .in("funnel_id", funnelIds)
+    .is("deleted_at", null)
+    .limit(10_000)
+    .returns<LeadMatchRow[]>();
+
+  if (leadsError) throw leadsError;
+
+  const byPhone = new Map<string, LeadMatchRow[]>();
+  const byHandle = new Map<string, LeadMatchRow[]>();
+  const byName = new Map<string, LeadMatchRow[]>();
+
+  for (const lead of leads ?? []) {
+    const phoneKey = phoneIndexKey(lead.phone);
+    if (phoneKey) pushToIndex(byPhone, phoneKey, lead);
+    const handleKey = normalizeHandle(lead.instagram_handle);
+    if (handleKey) pushToIndex(byHandle, handleKey, lead);
+    const nameKey = normalizeName(lead.name);
+    if (nameKey) pushToIndex(byName, nameKey, lead);
+  }
+
+  const matchedIds = new Set<string>();
+  const notMatched: AttendanceEntry[] = [];
+
+  for (const entry of entries) {
+    const phoneKey = phoneIndexKey(entry.phone);
+    let matches: LeadMatchRow[] | undefined;
+
+    if (phoneKey) matches = byPhone.get(phoneKey);
+    if (!matches || matches.length === 0) {
+      const handleKey = normalizeHandle(entry.instagram_handle);
+      if (handleKey) matches = byHandle.get(handleKey);
+    }
+    if (!matches || matches.length === 0) {
+      const nameKey = normalizeName(entry.name);
+      if (nameKey) matches = byName.get(nameKey);
+    }
+
+    if (!matches || matches.length === 0) {
+      notMatched.push(entry);
+      continue;
+    }
+    for (const lead of matches) matchedIds.add(lead.id);
+  }
+
+  const ids = Array.from(matchedIds);
+  if (ids.length > 0) {
+    const { error: updateError } = await supabase
+      .from("mentoria_leads")
+      .update({ joined_group: true })
+      .in("id", ids);
+    if (updateError) throw updateError;
+  }
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "lead_group_bulk",
     entityId: mentoriaId,
     changes: {
       meta: {
@@ -643,6 +746,7 @@ export async function aggregatesByFunnel(
     )
     .in("funnel_id", funnelIds)
     .is("deleted_at", null)
+    .limit(100_000)
     .returns<LeadAggregateSourceRow[]>();
 
   if (error || !data) return map;
