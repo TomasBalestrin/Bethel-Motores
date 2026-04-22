@@ -1,0 +1,367 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import type {
+  LeadBulkInput,
+  LeadCreateInput,
+  LeadUpdateInput,
+} from "@/lib/validators/lead";
+import type { Lead, LeadsPage } from "@/types/lead";
+import { logAudit } from "@/services/audit.service";
+
+const LEAD_COLUMNS =
+  "id, funnel_id, name, phone, instagram_handle, revenue, niche, joined_group, confirmed_presence, attended, scheduled, sold, sale_value, entry_value, created_by, created_at, updated_at" as const;
+
+function toRow(input: LeadCreateInput | LeadUpdateInput) {
+  return {
+    name: input.name,
+    phone: input.phone ?? null,
+    instagram_handle: input.instagram_handle ?? null,
+    revenue: input.revenue ?? null,
+    niche: input.niche ?? null,
+    joined_group: input.joined_group ?? false,
+    confirmed_presence: input.confirmed_presence ?? false,
+    attended: input.attended ?? false,
+    scheduled: input.scheduled ?? false,
+    sold: input.sold ?? false,
+    sale_value: input.sold ? input.sale_value ?? null : null,
+    entry_value: input.sold ? input.entry_value ?? null : null,
+  };
+}
+
+async function getMentoriaIdByFunnel(
+  supabase: SupabaseClient,
+  funnelId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("funnels")
+    .select("mentoria_id")
+    .eq("id", funnelId)
+    .is("deleted_at", null)
+    .maybeSingle<{ mentoria_id: string | null }>();
+  return data?.mentoria_id ?? null;
+}
+
+async function getMentoriaIdByLead(
+  supabase: SupabaseClient,
+  leadId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("mentoria_leads")
+    .select("funnel_id")
+    .eq("id", leadId)
+    .maybeSingle<{ funnel_id: string }>();
+  if (!data) return null;
+  return getMentoriaIdByFunnel(supabase, data.funnel_id);
+}
+
+export async function listLeadsByFunnelPaginated(
+  supabase: SupabaseClient,
+  funnelId: string,
+  page = 1,
+  pageSize = 100,
+  query?: string
+): Promise<LeadsPage> {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.min(500, Math.max(10, Math.floor(pageSize)));
+  const from = (safePage - 1) * safeSize;
+  const to = from + safeSize - 1;
+
+  let builder = supabase
+    .from("mentoria_leads")
+    .select(LEAD_COLUMNS, { count: "exact" })
+    .eq("funnel_id", funnelId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const term = query?.trim();
+  if (term && term.length > 0) {
+    const like = `%${term}%`;
+    builder = builder.or(
+      `name.ilike.${like},phone.ilike.${like},instagram_handle.ilike.${like},niche.ilike.${like}`
+    );
+  }
+
+  const { data, error, count } = await builder.returns<Lead[]>();
+  if (error) throw error;
+
+  return {
+    entries: data ?? [],
+    total: count ?? (data?.length ?? 0),
+    page: safePage,
+    pageSize: safeSize,
+  };
+}
+
+export async function countLeadsByFunnel(
+  supabase: SupabaseClient,
+  funnelId: string
+): Promise<number> {
+  const { count } = await supabase
+    .from("mentoria_leads")
+    .select("id", { count: "exact", head: true })
+    .eq("funnel_id", funnelId)
+    .is("deleted_at", null);
+  return count ?? 0;
+}
+
+export async function createLead(
+  supabase: SupabaseClient,
+  funnelId: string,
+  input: LeadCreateInput,
+  options: { actorId?: string | null } = {}
+): Promise<{ id: string }> {
+  const row = {
+    ...toRow(input),
+    funnel_id: funnelId,
+    created_by: options.actorId ?? null,
+  };
+
+  const { data, error } = await supabase
+    .from("mentoria_leads")
+    .insert(row)
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "lead",
+    entityId: data.id,
+    changes: { after: row as unknown as Record<string, unknown> },
+  });
+
+  const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+      actorId: options.actorId ?? null,
+    });
+  }
+
+  return data;
+}
+
+export async function bulkCreateLeads(
+  supabase: SupabaseClient,
+  funnelId: string,
+  input: LeadBulkInput,
+  options: { actorId?: string | null } = {}
+): Promise<{ inserted: number }> {
+  const rows = input.leads.map((lead) => ({
+    ...toRow(lead),
+    funnel_id: funnelId,
+    created_by: options.actorId ?? null,
+  }));
+
+  const chunkSize = 500;
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const { error } = await supabase.from("mentoria_leads").insert(chunk);
+    if (error) throw error;
+    inserted += chunk.length;
+  }
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "create",
+    entityType: "lead_bulk",
+    entityId: funnelId,
+    changes: { meta: { count: inserted } },
+  });
+
+  const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+      actorId: options.actorId ?? null,
+    });
+  }
+
+  return { inserted };
+}
+
+export async function updateLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  input: LeadUpdateInput,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.phone !== undefined) patch.phone = input.phone ?? null;
+  if (input.instagram_handle !== undefined)
+    patch.instagram_handle = input.instagram_handle ?? null;
+  if (input.revenue !== undefined) patch.revenue = input.revenue ?? null;
+  if (input.niche !== undefined) patch.niche = input.niche ?? null;
+  if (input.joined_group !== undefined) patch.joined_group = input.joined_group;
+  if (input.confirmed_presence !== undefined)
+    patch.confirmed_presence = input.confirmed_presence;
+  if (input.attended !== undefined) patch.attended = input.attended;
+  if (input.scheduled !== undefined) patch.scheduled = input.scheduled;
+  if (input.sold !== undefined) patch.sold = input.sold;
+  if (input.sale_value !== undefined) patch.sale_value = input.sale_value ?? null;
+  if (input.entry_value !== undefined)
+    patch.entry_value = input.entry_value ?? null;
+
+  if (input.sold === false) {
+    patch.sale_value = null;
+    patch.entry_value = null;
+  }
+
+  const { error } = await supabase
+    .from("mentoria_leads")
+    .update(patch)
+    .eq("id", leadId);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "update",
+    entityType: "lead",
+    entityId: leadId,
+    changes: { after: patch },
+  });
+
+  const mentoriaId = await getMentoriaIdByLead(supabase, leadId);
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+      actorId: options.actorId ?? null,
+    });
+  }
+}
+
+export async function deleteLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const mentoriaId = await getMentoriaIdByLead(supabase, leadId);
+
+  const { error } = await supabase
+    .from("mentoria_leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", leadId);
+
+  if (error) throw error;
+
+  await logAudit(supabase, {
+    userId: options.actorId ?? null,
+    action: "delete",
+    entityType: "lead",
+    entityId: leadId,
+  });
+
+  if (mentoriaId) {
+    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+      actorId: options.actorId ?? null,
+    });
+  }
+}
+
+interface LatestSnapshotManual {
+  calls_realizadas: number;
+  investimento_trafego: number;
+  investimento_api: number;
+}
+
+async function latestManualSnapshot(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<LatestSnapshotManual> {
+  const { data } = await supabase
+    .from("mentoria_metrics")
+    .select("calls_realizadas, investimento_trafego, investimento_api")
+    .eq("mentoria_id", mentoriaId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{
+      calls_realizadas: number | null;
+      investimento_trafego: number | null;
+      investimento_api: number | null;
+    }>();
+
+  return {
+    calls_realizadas: Number(data?.calls_realizadas ?? 0),
+    investimento_trafego: Number(data?.investimento_trafego ?? 0),
+    investimento_api: Number(data?.investimento_api ?? 0),
+  };
+}
+
+interface LeadAggregateRow {
+  joined_group: boolean;
+  attended: boolean;
+  scheduled: boolean;
+  sold: boolean;
+  sale_value: number | null;
+  entry_value: number | null;
+}
+
+export async function recalcMentoriaMetricsFromLeads(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  options: { actorId?: string | null } = {}
+): Promise<void> {
+  const { data: funnels, error: funnelsError } = await supabase
+    .from("funnels")
+    .select("id")
+    .eq("mentoria_id", mentoriaId)
+    .is("deleted_at", null)
+    .returns<{ id: string }[]>();
+
+  if (funnelsError) return;
+
+  const funnelIds = (funnels ?? []).map((row) => row.id);
+  const baseline = await latestManualSnapshot(supabase, mentoriaId);
+
+  let leads_grupo = 0;
+  let leads_ao_vivo = 0;
+  let agendamentos = 0;
+  let vendas = 0;
+  let valor_vendas = 0;
+  let valor_entrada = 0;
+
+  if (funnelIds.length > 0) {
+    const { data: leads, error: leadsError } = await supabase
+      .from("mentoria_leads")
+      .select(
+        "joined_group, attended, scheduled, sold, sale_value, entry_value"
+      )
+      .in("funnel_id", funnelIds)
+      .is("deleted_at", null)
+      .returns<LeadAggregateRow[]>();
+
+    if (leadsError) return;
+
+    for (const lead of leads ?? []) {
+      if (lead.joined_group) leads_grupo += 1;
+      if (lead.attended) leads_ao_vivo += 1;
+      if (lead.scheduled) agendamentos += 1;
+      if (lead.sold) {
+        vendas += 1;
+        valor_vendas += Number(lead.sale_value ?? 0);
+        valor_entrada += Number(lead.entry_value ?? 0);
+      }
+    }
+  }
+
+  const snapshot = {
+    mentoria_id: mentoriaId,
+    leads_grupo,
+    leads_ao_vivo,
+    agendamentos,
+    calls_realizadas: baseline.calls_realizadas,
+    vendas,
+    valor_vendas,
+    valor_entrada,
+    investimento_trafego: baseline.investimento_trafego,
+    investimento_api: baseline.investimento_api,
+    source: "manual" as const,
+    captured_at: new Date().toISOString(),
+    captured_by: options.actorId ?? null,
+  };
+
+  await supabase.from("mentoria_metrics").insert(snapshot);
+}
