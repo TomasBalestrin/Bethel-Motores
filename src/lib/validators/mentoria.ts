@@ -44,6 +44,14 @@ export const MENTORIA_SORT_OPTIONS = [
 ] as const;
 export type MentoriaSort = (typeof MENTORIA_SORT_OPTIONS)[number];
 
+const optionalLabel = z
+  .string()
+  .trim()
+  .max(200)
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : null))
+  .nullable();
+
 export const disparoManualSchema = z.object({
   received_at: z
     .string()
@@ -51,15 +59,15 @@ export const disparoManualSchema = z.object({
     .refine((value) => !Number.isNaN(new Date(value).getTime()), {
       message: "Data inválida",
     }),
-  funnel_label: z
-    .string()
-    .trim()
-    .max(120)
-    .optional()
-    .transform((value) => (value && value.length > 0 ? value : null))
-    .nullable(),
+  funnel_label: optionalLabel,
+  campaign_name: optionalLabel,
+  template_name: optionalLabel,
+  responsible_name: optionalLabel,
   volume_sent: z.coerce.number().int().nonnegative(),
   volume_delivered: z.coerce.number().int().nonnegative(),
+  volume_read: z.coerce.number().int().nonnegative().optional().default(0),
+  volume_replied: z.coerce.number().int().nonnegative().optional().default(0),
+  volume_failed: z.coerce.number().int().nonnegative().optional().default(0),
   cost: z.coerce.number().nonnegative(),
 });
 export type DisparoManualInput = z.infer<typeof disparoManualSchema>;

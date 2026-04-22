@@ -554,8 +554,14 @@ export interface DisparoEvent {
   processed_at: string | null;
   volume_sent: number;
   volume_delivered: number;
+  volume_read: number;
+  volume_replied: number;
+  volume_failed: number;
   cost: number;
   funnel_label: string | null;
+  campaign_name: string | null;
+  template_name: string | null;
+  responsible_name: string | null;
 }
 
 interface DisparoRow {
@@ -571,10 +577,27 @@ interface DisparoRow {
   source: { slug: string | null } | null;
 }
 
+function pickPath(
+  payload: Record<string, unknown> | null,
+  path: string
+): unknown {
+  if (!payload) return undefined;
+  const parts = path.split(".");
+  let current: unknown = payload;
+  for (const part of parts) {
+    if (current && typeof current === "object" && !Array.isArray(current)) {
+      current = (current as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return current;
+}
+
 function pickNumber(payload: Record<string, unknown> | null, keys: string[]): number {
   if (!payload) return 0;
   for (const key of keys) {
-    const value = (payload as Record<string, unknown>)[key];
+    const value = pickPath(payload, key);
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
       const parsed = Number(value);
@@ -590,8 +613,12 @@ function pickString(
 ): string | null {
   if (!payload) return null;
   for (const key of keys) {
-    const value = (payload as Record<string, unknown>)[key];
+    const value = pickPath(payload, key);
     if (typeof value === "string" && value.trim().length > 0) return value;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const named = (value as Record<string, unknown>)["name"];
+      if (typeof named === "string" && named.trim().length > 0) return named;
+    }
   }
   return null;
 }
@@ -613,16 +640,80 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "volume",
       "volume_sent",
       "sent",
+      "stats.sent",
+      "metrics.sent",
+      "stats.enviados",
     ]),
     volume_delivered: pickNumber(payload as Record<string, unknown>, [
       "volume_delivered",
       "delivered",
+      "stats.delivered",
+      "metrics.delivered",
+      "stats.entregues",
     ]),
-    cost: pickNumber(payload as Record<string, unknown>, ["cost", "amount", "value"]),
+    volume_read: pickNumber(payload as Record<string, unknown>, [
+      "read",
+      "volume_read",
+      "reads",
+      "stats.read",
+      "metrics.read",
+      "stats.lidos",
+    ]),
+    volume_replied: pickNumber(payload as Record<string, unknown>, [
+      "replied",
+      "volume_replied",
+      "replies",
+      "responses",
+      "stats.replied",
+      "metrics.replied",
+      "stats.respondidos",
+    ]),
+    volume_failed: pickNumber(payload as Record<string, unknown>, [
+      "failed",
+      "volume_failed",
+      "failures",
+      "errors",
+      "stats.failed",
+      "metrics.failed",
+      "stats.falhas",
+    ]),
+    cost: pickNumber(payload as Record<string, unknown>, [
+      "cost",
+      "amount",
+      "value",
+      "cost.total",
+      "total_cost",
+      "stats.cost",
+    ]),
     funnel_label: pickString(payload as Record<string, unknown>, [
       "funnel",
       "funnel_name",
       "funnel_id",
+    ]),
+    campaign_name: pickString(payload as Record<string, unknown>, [
+      "campaign_name",
+      "campaign",
+      "name",
+      "title",
+      "label",
+      "disparo",
+      "disparo_name",
+    ]),
+    template_name: pickString(payload as Record<string, unknown>, [
+      "template_name",
+      "template",
+      "template_id",
+      "template.name",
+    ]),
+    responsible_name: pickString(payload as Record<string, unknown>, [
+      "responsible_name",
+      "responsible",
+      "responsavel",
+      "user_name",
+      "user",
+      "sent_by",
+      "responsible.name",
+      "user.name",
     ]),
   };
 }
@@ -685,8 +776,14 @@ async function resolveFluxonSourceId(
 export interface DisparoManualPayload {
   received_at: string;
   funnel_label: string | null;
+  campaign_name: string | null;
+  template_name: string | null;
+  responsible_name: string | null;
   volume_sent: number;
   volume_delivered: number;
+  volume_read: number;
+  volume_replied: number;
+  volume_failed: number;
   cost: number;
 }
 
@@ -695,9 +792,15 @@ function buildDisparoPayload(input: DisparoManualPayload) {
     volume: input.volume_sent,
     volume_sent: input.volume_sent,
     volume_delivered: input.volume_delivered,
+    volume_read: input.volume_read,
+    volume_replied: input.volume_replied,
+    volume_failed: input.volume_failed,
     cost: input.cost,
     funnel: input.funnel_label,
     funnel_name: input.funnel_label,
+    campaign_name: input.campaign_name,
+    template_name: input.template_name,
+    responsible_name: input.responsible_name,
     source: "manual",
   };
 }

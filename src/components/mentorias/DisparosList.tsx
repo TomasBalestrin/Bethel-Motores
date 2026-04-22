@@ -97,95 +97,150 @@ export function DisparosList({ events, mentoriaId }: DisparosListProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Data</TableHead>
+              <TableHead>Nome</TableHead>
               <TableHead>Funil</TableHead>
+              <TableHead>Template</TableHead>
               <TableHead className="text-right">Enviado</TableHead>
-              <TableHead className="text-right">Entregue</TableHead>
+              <TableHead className="text-right">Entrega</TableHead>
+              <TableHead className="text-right">Lidos / Resp.</TableHead>
               <TableHead className="text-right">Custo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {events.map((event) => (
-              <TableRow key={event.id} className="hover:bg-muted/40">
-                <TableCell
-                  className="tabular-nums cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  {formatDateTimeBR(event.received_at)}
-                </TableCell>
-                <TableCell
-                  className="text-sm text-muted-foreground cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  {event.funnel_label ?? "—"}
-                </TableCell>
-                <TableCell
-                  className="text-right font-medium tabular-nums cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  {formatInteger(event.volume_sent)}
-                </TableCell>
-                <TableCell
-                  className="text-right tabular-nums cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  {formatInteger(event.volume_delivered)}
-                </TableCell>
-                <TableCell
-                  className="text-right tabular-nums cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  {formatCurrency(event.cost)}
-                </TableCell>
-                <TableCell
-                  className="cursor-pointer"
-                  onClick={() => setSelected(event)}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "rounded-full border text-[10px]",
-                        STATUS_CLASSES[event.status]
-                      )}
-                    >
-                      {STATUS_LABEL[event.status]}
-                    </Badge>
-                    {event.status === "error" ? (
-                      <AlertCircle className="h-3 w-3 text-destructive" />
+            {events.map((event) => {
+              const deliveryRate =
+                event.volume_sent > 0
+                  ? (event.volume_delivered / event.volume_sent) * 100
+                  : 0;
+              return (
+                <TableRow key={event.id} className="hover:bg-muted/40">
+                  <TableCell
+                    className="tabular-nums cursor-pointer whitespace-nowrap"
+                    onClick={() => setSelected(event)}
+                  >
+                    {formatDateTimeBR(event.received_at)}
+                  </TableCell>
+                  <TableCell
+                    className="cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    <div className="max-w-[180px] truncate font-medium">
+                      {event.campaign_name ?? "—"}
+                    </div>
+                    {event.responsible_name ? (
+                      <div className="text-[10px] text-muted-foreground">
+                        {event.responsible_name}
+                      </div>
                     ) : null}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label="Editar disparo"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditing(event);
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label="Excluir disparo"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleting(event);
-                      }}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                  <TableCell
+                    className="text-sm text-muted-foreground cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    {event.funnel_label ?? "—"}
+                  </TableCell>
+                  <TableCell
+                    className="cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    {event.template_name ? (
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
+                        {event.template_name}
+                      </code>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell
+                    className="text-right font-medium tabular-nums cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    {formatInteger(event.volume_sent)}
+                  </TableCell>
+                  <TableCell
+                    className="text-right tabular-nums cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    <div>{formatInteger(event.volume_delivered)}</div>
+                    {event.volume_sent > 0 ? (
+                      <div className="text-[10px] text-muted-foreground">
+                        {deliveryRate.toFixed(1)}%
+                      </div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell
+                    className="text-right tabular-nums cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    <div>
+                      {formatInteger(event.volume_read)}
+                      <span className="mx-1 text-muted-foreground">/</span>
+                      {formatInteger(event.volume_replied)}
+                    </div>
+                    {event.volume_failed > 0 ? (
+                      <div className="text-[10px] text-destructive">
+                        {formatInteger(event.volume_failed)} falha
+                        {event.volume_failed === 1 ? "" : "s"}
+                      </div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell
+                    className="text-right tabular-nums cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    {formatCurrency(event.cost)}
+                  </TableCell>
+                  <TableCell
+                    className="cursor-pointer"
+                    onClick={() => setSelected(event)}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "rounded-full border text-[10px]",
+                          STATUS_CLASSES[event.status]
+                        )}
+                      >
+                        {STATUS_LABEL[event.status]}
+                      </Badge>
+                      {event.status === "error" ? (
+                        <AlertCircle className="h-3 w-3 text-destructive" />
+                      ) : null}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Editar disparo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditing(event);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Excluir disparo"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleting(event);
+                        }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

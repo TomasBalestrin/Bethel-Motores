@@ -56,8 +56,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       {
         received_at: new Date(parsed.data.received_at).toISOString(),
         funnel_label: parsed.data.funnel_label,
+        campaign_name: parsed.data.campaign_name,
+        template_name: parsed.data.template_name,
+        responsible_name: parsed.data.responsible_name,
         volume_sent: parsed.data.volume_sent,
         volume_delivered: parsed.data.volume_delivered,
+        volume_read: parsed.data.volume_read,
+        volume_replied: parsed.data.volume_replied,
+        volume_failed: parsed.data.volume_failed,
         cost: parsed.data.cost,
       },
       { actorId: user.id }

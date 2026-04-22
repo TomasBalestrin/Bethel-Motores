@@ -93,25 +93,55 @@ export function DisparoEventDrawer({
         </DrawerHeader>
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 pb-4 text-sm">
-          <dl className="grid grid-cols-2 gap-2">
-            <div>
-              <dt className="text-xs text-muted-foreground">Source ID externo</dt>
-              <dd className="font-mono text-xs">
-                {event.source_event_id ?? "—"}
-              </dd>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <div className="col-span-2 sm:col-span-3">
+              <dt className="text-xs text-muted-foreground">Nome do disparo</dt>
+              <dd className="font-medium">{event.campaign_name ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Funil</dt>
               <dd>{event.funnel_label ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Volume enviado</dt>
+              <dt className="text-xs text-muted-foreground">Template</dt>
+              <dd>
+                {event.template_name ? (
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {event.template_name}
+                  </code>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Responsável</dt>
+              <dd>{event.responsible_name ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Enviado</dt>
               <dd className="font-medium tabular-nums">{event.volume_sent}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Volume entregue</dt>
+              <dt className="text-xs text-muted-foreground">Entregue</dt>
               <dd className="font-medium tabular-nums">
                 {event.volume_delivered}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Lidos</dt>
+              <dd className="font-medium tabular-nums">{event.volume_read}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Respondidos</dt>
+              <dd className="font-medium tabular-nums">
+                {event.volume_replied}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Falhas</dt>
+              <dd className="font-medium tabular-nums">
+                {event.volume_failed}
               </dd>
             </div>
             <div>
@@ -121,6 +151,12 @@ export function DisparoEventDrawer({
                   style: "currency",
                   currency: "BRL",
                 })}
+              </dd>
+            </div>
+            <div className="col-span-2 sm:col-span-3">
+              <dt className="text-xs text-muted-foreground">Source ID externo</dt>
+              <dd className="font-mono text-xs">
+                {event.source_event_id ?? "—"}
               </dd>
             </div>
           </dl>
