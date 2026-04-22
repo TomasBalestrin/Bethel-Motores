@@ -473,14 +473,11 @@ export async function markAttendanceByMatching(
   if (leadsError) throw leadsError;
 
   const byPhone = new Map<string, LeadMatchRow[]>();
-  const byHandle = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
 
   for (const lead of leads ?? []) {
     const phoneKey = phoneIndexKey(lead.phone);
     if (phoneKey) pushToIndex(byPhone, phoneKey, lead);
-    const handleKey = normalizeHandle(lead.instagram_handle);
-    if (handleKey) pushToIndex(byHandle, handleKey, lead);
     const nameKey = normalizeName(lead.name);
     if (nameKey) pushToIndex(byName, nameKey, lead);
   }
@@ -489,24 +486,22 @@ export async function markAttendanceByMatching(
   const notMatched: AttendanceEntry[] = [];
 
   for (const entry of entries) {
-    const phoneKey = phoneIndexKey(entry.phone);
-    let matches: LeadMatchRow[] | undefined;
+    const entryPhoneKey = phoneIndexKey(entry.phone);
+    const entryNameKey = normalizeName(entry.name);
+    const entryMatched = new Set<string>();
 
-    if (phoneKey) matches = byPhone.get(phoneKey);
-    if (!matches || matches.length === 0) {
-      const handleKey = normalizeHandle(entry.instagram_handle);
-      if (handleKey) matches = byHandle.get(handleKey);
+    if (entryPhoneKey) {
+      for (const lead of byPhone.get(entryPhoneKey) ?? []) entryMatched.add(lead.id);
     }
-    if (!matches || matches.length === 0) {
-      const nameKey = normalizeName(entry.name);
-      if (nameKey) matches = byName.get(nameKey);
+    if (entryNameKey) {
+      for (const lead of byName.get(entryNameKey) ?? []) entryMatched.add(lead.id);
     }
 
-    if (!matches || matches.length === 0) {
+    if (entryMatched.size === 0) {
       notMatched.push(entry);
       continue;
     }
-    for (const lead of matches) matchedIds.add(lead.id);
+    entryMatched.forEach((id) => matchedIds.add(id));
   }
 
   const ids = Array.from(matchedIds);
@@ -576,14 +571,11 @@ export async function markGroupByMatching(
   if (leadsError) throw leadsError;
 
   const byPhone = new Map<string, LeadMatchRow[]>();
-  const byHandle = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
 
   for (const lead of leads ?? []) {
     const phoneKey = phoneIndexKey(lead.phone);
     if (phoneKey) pushToIndex(byPhone, phoneKey, lead);
-    const handleKey = normalizeHandle(lead.instagram_handle);
-    if (handleKey) pushToIndex(byHandle, handleKey, lead);
     const nameKey = normalizeName(lead.name);
     if (nameKey) pushToIndex(byName, nameKey, lead);
   }
@@ -592,24 +584,22 @@ export async function markGroupByMatching(
   const notMatched: AttendanceEntry[] = [];
 
   for (const entry of entries) {
-    const phoneKey = phoneIndexKey(entry.phone);
-    let matches: LeadMatchRow[] | undefined;
+    const entryPhoneKey = phoneIndexKey(entry.phone);
+    const entryNameKey = normalizeName(entry.name);
+    const entryMatched = new Set<string>();
 
-    if (phoneKey) matches = byPhone.get(phoneKey);
-    if (!matches || matches.length === 0) {
-      const handleKey = normalizeHandle(entry.instagram_handle);
-      if (handleKey) matches = byHandle.get(handleKey);
+    if (entryPhoneKey) {
+      for (const lead of byPhone.get(entryPhoneKey) ?? []) entryMatched.add(lead.id);
     }
-    if (!matches || matches.length === 0) {
-      const nameKey = normalizeName(entry.name);
-      if (nameKey) matches = byName.get(nameKey);
+    if (entryNameKey) {
+      for (const lead of byName.get(entryNameKey) ?? []) entryMatched.add(lead.id);
     }
 
-    if (!matches || matches.length === 0) {
+    if (entryMatched.size === 0) {
       notMatched.push(entry);
       continue;
     }
-    for (const lead of matches) matchedIds.add(lead.id);
+    entryMatched.forEach((id) => matchedIds.add(id));
   }
 
   const ids = Array.from(matchedIds);
