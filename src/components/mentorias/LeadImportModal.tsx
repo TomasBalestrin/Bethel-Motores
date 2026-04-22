@@ -38,10 +38,15 @@ const TABS: { value: Tab; label: string; icon: typeof FileUp }[] = [
   { value: "sheets", label: "Google Sheets", icon: Link2 },
 ];
 
+interface BulkResult {
+  inserted: number;
+  updated: number;
+}
+
 async function submitBulk(
   funnelId: string,
   leads: LeadCreateInput[]
-): Promise<number> {
+): Promise<BulkResult> {
   const response = await fetch(`/api/funnels/${funnelId}/leads/bulk`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,7 +59,10 @@ async function submitBulk(
     );
   }
   const data = await response.json();
-  return Number(data?.data?.inserted ?? leads.length);
+  return {
+    inserted: Number(data?.data?.inserted ?? 0),
+    updated: Number(data?.data?.updated ?? 0),
+  };
 }
 
 export function LeadImportModal({
@@ -148,10 +156,23 @@ export function LeadImportModal({
     if (!preview || preview.length === 0) return;
     setSubmitting(true);
     try {
-      const inserted = await submitBulk(funnelId, preview);
-      toast.success(
-        inserted === 1 ? "1 lead importado" : `${inserted} leads importados`
-      );
+      const result = await submitBulk(funnelId, preview);
+      const parts: string[] = [];
+      if (result.inserted > 0)
+        parts.push(
+          result.inserted === 1
+            ? "1 lead novo"
+            : `${result.inserted} leads novos`
+        );
+      if (result.updated > 0)
+        parts.push(
+          result.updated === 1
+            ? "1 atualizado"
+            : `${result.updated} atualizados`
+        );
+      if (parts.length === 0)
+        parts.push("Nada novo pra salvar — tudo já estava preenchido");
+      toast.success(parts.join(" · "));
       reset();
       onOpenChange(false);
       onSuccess?.();
