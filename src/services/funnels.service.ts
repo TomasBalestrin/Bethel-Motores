@@ -144,28 +144,20 @@ function detectAggregateKey(
   if (/valor.*venda|venda.*valor/.test(haystack)) return "valor_em_venda";
   if (haystack.includes("venda")) return "vendas";
   if (haystack.includes("grupo")) return "no_grupo";
-  // Ao vivo / compareceu — testar antes de "presença" porque "compareceu ao vivo"
-  // poderia conter ambos.
-  if (
-    haystack.includes("ao vivo") ||
-    haystack.includes(" vivo") ||
-    haystack.startsWith("vivo") ||
-    haystack.includes("compareceu") ||
-    haystack.includes("compareceram")
-  )
+  // Ao vivo / compareceu — vem antes de "presenca" pra cobrir "compareceu ao vivo"
+  if (haystack.includes("vivo") || haystack.includes("comparece"))
     return "ao_vivo";
   // Confirmaram presença
   if (
     haystack.includes("confirma") ||
-    haystack.includes("confirmad") ||
-    haystack.includes("presenca") ||
+    haystack.includes("presenc") ||
     haystack.includes("presente")
   )
     return "confirmaram";
   if (haystack.includes("agendad") || haystack.includes("agendamento"))
     return "agendados";
   if (
-    haystack.includes("leads") ||
+    haystack.includes("lead") ||
     haystack.includes("inscrito") ||
     haystack.includes("funil")
   )
@@ -187,8 +179,15 @@ function mergeDerivedValues(
     if (!aggKey) continue;
 
     const existing = byKey.get(field.field_key);
-    // Manual override vence o derivado.
-    if (existing && existing.source === "manual") continue;
+    // Manual vence o derivado SÓ quando tem valor real preenchido.
+    // Se o valor manual é nulo (nunca foi preenchido), deixa o derivado
+    // entrar.
+    if (
+      existing &&
+      existing.source === "manual" &&
+      existing.value_numeric != null
+    )
+      continue;
 
     const numeric = agg ? agg[aggKey] : 0;
     byKey.set(field.field_key, {
