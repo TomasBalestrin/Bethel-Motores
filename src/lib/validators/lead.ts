@@ -46,7 +46,7 @@ export const leadUpdateSchema = z.object({
 export type LeadUpdateInput = z.infer<typeof leadUpdateSchema>;
 
 export const leadBulkSchema = z.object({
-  leads: z.array(leadCreateSchema).min(1).max(5000),
+  leads: z.array(leadCreateSchema).min(1).max(10_000),
 });
 export type LeadBulkInput = z.infer<typeof leadBulkSchema>;
 
