@@ -3,7 +3,10 @@ import Papa from "papaparse";
 import type { LeadCreateInput } from "@/lib/validators/lead";
 import type { AttendanceEntry } from "@/services/leads.service";
 
-const HEADER_SYNONYMS: Record<string, keyof LeadCreateInput> = {
+type LeadHeaderKey = "name" | "phone" | "instagram_handle" | "revenue" | "niche";
+
+// Match exato (rápido) depois de remover acentos/pontuação e lower.
+const HEADER_SYNONYMS: Record<string, LeadHeaderKey> = {
   nome: "name",
   name: "name",
   fullname: "name",
@@ -25,12 +28,39 @@ const HEADER_SYNONYMS: Record<string, keyof LeadCreateInput> = {
   segmento: "niche",
 };
 
+// Fallback: se o cabeçalho for uma pergunta completa (Google Forms tipo
+// "Qual é o seu nome completo?"), procuramos tokens por prioridade.
+// Ordem importa: tokens mais específicos primeiro.
+const HEADER_PATTERNS: { tokens: string[]; key: LeadHeaderKey }[] = [
+  { tokens: ["whatsapp", "telefone", "celular", "phone"], key: "phone" },
+  { tokens: ["instagram", "perfil do ig"], key: "instagram_handle" },
+  { tokens: ["faturamento", "receita", "revenue"], key: "revenue" },
+  { tokens: ["nicho", "niche", "segmento"], key: "niche" },
+  { tokens: ["nome completo", "nome", "name", "fullname"], key: "name" },
+  { tokens: ["handle", "usuario", "user"], key: "instagram_handle" },
+];
+
 function normalizeHeader(raw: string): string {
   return raw
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-zA-Z0-9]+/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function mapHeader(raw: string): LeadHeaderKey | null {
+  const normalized = normalizeHeader(raw);
+  if (!normalized) return null;
+  const compact = normalized.replace(/\s+/g, "");
+  const exact = HEADER_SYNONYMS[compact];
+  if (exact) return exact;
+  for (const group of HEADER_PATTERNS) {
+    for (const token of group.tokens) {
+      if (normalized.includes(token)) return group.key;
+    }
+  }
+  return null;
 }
 
 function normalizeRevenue(raw: string): number | null {
@@ -64,14 +94,21 @@ export function parseLeadsFromCsv(text: string): ParseResult {
     .map((err) => `Linha ${err.row ?? "?"}: ${err.message}`);
 
   const rawHeaders = parsed.meta.fields ?? [];
-  const headerMap = new Map<string, keyof LeadCreateInput>();
+  const headerMap = new Map<string, LeadHeaderKey>();
   const unmapped: string[] = [];
 
   for (const header of rawHeaders) {
-    const key = normalizeHeader(header);
-    const mapped = HEADER_SYNONYMS[key];
-    if (mapped) headerMap.set(header, mapped);
-    else unmapped.push(header);
+    const mapped = mapHeader(header);
+    if (mapped) {
+      if (!Array.from(headerMap.values()).includes(mapped)) {
+        headerMap.set(header, mapped);
+      } else {
+        // cabeçalho duplicado pra mesma chave — ignoramos o segundo
+        unmapped.push(header);
+      }
+    } else {
+      unmapped.push(header);
+    }
   }
 
   const entries = Array.from(headerMap.entries());
@@ -165,10 +202,13 @@ export function parseAttendanceFromCsv(text: string): AttendanceParseResult {
   const unmapped: string[] = [];
 
   for (const header of rawHeaders) {
-    const key = normalizeHeader(header);
-    const mapped = HEADER_SYNONYMS[key];
+    const mapped = mapHeader(header);
     if (mapped === "name" || mapped === "phone" || mapped === "instagram_handle") {
-      headerMap.set(header, mapped);
+      if (!Array.from(headerMap.values()).includes(mapped)) {
+        headerMap.set(header, mapped);
+      } else {
+        unmapped.push(header);
+      }
     } else {
       unmapped.push(header);
     }
