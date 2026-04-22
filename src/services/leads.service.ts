@@ -502,3 +502,78 @@ export async function markAttendanceByMatching(
     notMatched,
   };
 }
+
+export interface FunnelLeadAggregates {
+  leads_do_funil: number;
+  no_grupo: number;
+  ao_vivo: number;
+  agendados: number;
+  vendas: number;
+  valor_em_venda: number;
+  valor_de_entrada: number;
+}
+
+export const FUNNEL_DERIVED_FIELD_KEYS = [
+  "leads_do_funil",
+  "no_grupo",
+  "ao_vivo",
+  "agendados",
+  "vendas",
+  "valor_em_venda",
+  "valor_de_entrada",
+] as const;
+
+interface LeadAggregateSourceRow {
+  funnel_id: string;
+  joined_group: boolean;
+  attended: boolean;
+  scheduled: boolean;
+  sold: boolean;
+  sale_value: number | null;
+  entry_value: number | null;
+}
+
+function emptyAggregates(): FunnelLeadAggregates {
+  return {
+    leads_do_funil: 0,
+    no_grupo: 0,
+    ao_vivo: 0,
+    agendados: 0,
+    vendas: 0,
+    valor_em_venda: 0,
+    valor_de_entrada: 0,
+  };
+}
+
+export async function aggregatesByFunnel(
+  supabase: SupabaseClient,
+  funnelIds: string[]
+): Promise<Map<string, FunnelLeadAggregates>> {
+  const map = new Map<string, FunnelLeadAggregates>();
+  if (funnelIds.length === 0) return map;
+
+  const { data, error } = await supabase
+    .from("mentoria_leads")
+    .select("funnel_id, joined_group, attended, scheduled, sold, sale_value, entry_value")
+    .in("funnel_id", funnelIds)
+    .is("deleted_at", null)
+    .returns<LeadAggregateSourceRow[]>();
+
+  if (error || !data) return map;
+
+  for (const row of data) {
+    const agg = map.get(row.funnel_id) ?? emptyAggregates();
+    agg.leads_do_funil += 1;
+    if (row.joined_group) agg.no_grupo += 1;
+    if (row.attended) agg.ao_vivo += 1;
+    if (row.scheduled) agg.agendados += 1;
+    if (row.sold) {
+      agg.vendas += 1;
+      agg.valor_em_venda += Number(row.sale_value ?? 0);
+      agg.valor_de_entrada += Number(row.entry_value ?? 0);
+    }
+    map.set(row.funnel_id, agg);
+  }
+
+  return map;
+}

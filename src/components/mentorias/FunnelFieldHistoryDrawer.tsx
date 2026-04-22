@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Plug, User as UserIcon, Globe } from "lucide-react";
+import { Globe, ListChecks, Loader2, Plug, User as UserIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,11 +36,12 @@ interface FunnelFieldHistoryDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const SOURCE_ICON = {
+const SOURCE_ICON: Record<MetricSource, typeof UserIcon> = {
   manual: UserIcon,
   webhook: Plug,
   api: Globe,
-} as const;
+  derived: ListChecks,
+};
 
 function formatValue(
   fieldType: FieldType | undefined,

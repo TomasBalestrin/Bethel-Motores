@@ -9,7 +9,7 @@ export const FIELD_TYPES = [
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
-export const METRIC_SOURCES = ["manual", "webhook", "api"] as const;
+export const METRIC_SOURCES = ["manual", "webhook", "api", "derived"] as const;
 export type MetricSource = (typeof METRIC_SOURCES)[number];
 
 export const funnelCreateSchema = z.object({
