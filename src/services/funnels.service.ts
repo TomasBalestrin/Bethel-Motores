@@ -128,7 +128,8 @@ function normalizeForDetect(text: string): string {
   return text
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[_\-]+/g, " ");
 }
 
 type AggregateKey = keyof FunnelLeadAggregates;
@@ -139,14 +140,26 @@ function detectAggregateKey(
 ): AggregateKey | null {
   const haystack = `${normalizeForDetect(fieldKey)} ${normalizeForDetect(fieldLabel)}`;
   // Ordem importa: mais específico primeiro.
-  if (/\bentrada\b/.test(haystack)) return "valor_de_entrada";
-  if (/\bvalor\b.*\bvenda\b|\bvenda\b.*\bvalor\b|valor_em_venda|valor_vendas?/.test(haystack))
-    return "valor_em_venda";
-  if (/\bvendas?\b/.test(haystack)) return "vendas";
-  if (/\bgrupo\b/.test(haystack)) return "no_grupo";
-  if (/\bao[ _]?vivo\b|\bcompareceu\b/.test(haystack)) return "ao_vivo";
-  if (/\bagendad/.test(haystack)) return "agendados";
-  if (/\bleads?\b|\binscritos?\b/.test(haystack)) return "leads_do_funil";
+  if (haystack.includes("entrada")) return "valor_de_entrada";
+  if (/valor.*venda|venda.*valor/.test(haystack)) return "valor_em_venda";
+  if (haystack.includes("venda")) return "vendas";
+  if (haystack.includes("grupo")) return "no_grupo";
+  if (
+    haystack.includes("vivo") ||
+    haystack.includes("compareceu") ||
+    haystack.includes("compareceram") ||
+    haystack.includes("presenca") ||
+    haystack.includes("presente")
+  )
+    return "ao_vivo";
+  if (haystack.includes("agendad") || haystack.includes("agendamento"))
+    return "agendados";
+  if (
+    haystack.includes("leads") ||
+    haystack.includes("inscrito") ||
+    haystack.includes("funil")
+  )
+    return "leads_do_funil";
   return null;
 }
 
