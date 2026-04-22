@@ -15,7 +15,6 @@ import type {
 import { logAudit } from "@/services/audit.service";
 import {
   aggregatesByFunnel,
-  FUNNEL_DERIVED_FIELD_KEYS,
   type FunnelLeadAggregates,
 } from "@/services/leads.service";
 
@@ -125,29 +124,52 @@ async function fetchCurrentValues(
   return map;
 }
 
-function aggregateToValue(
-  fieldKey: (typeof FUNNEL_DERIVED_FIELD_KEYS)[number],
-  agg: FunnelLeadAggregates
-): number {
-  return agg[fieldKey];
+function normalizeForDetect(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
+type AggregateKey = keyof FunnelLeadAggregates;
+
+function detectAggregateKey(
+  fieldKey: string,
+  fieldLabel: string
+): AggregateKey | null {
+  const haystack = `${normalizeForDetect(fieldKey)} ${normalizeForDetect(fieldLabel)}`;
+  // Ordem importa: mais específico primeiro.
+  if (/\bentrada\b/.test(haystack)) return "valor_de_entrada";
+  if (/\bvalor\b.*\bvenda\b|\bvenda\b.*\bvalor\b|valor_em_venda|valor_vendas?/.test(haystack))
+    return "valor_em_venda";
+  if (/\bvendas?\b/.test(haystack)) return "vendas";
+  if (/\bgrupo\b/.test(haystack)) return "no_grupo";
+  if (/\bao[ _]?vivo\b|\bcompareceu\b/.test(haystack)) return "ao_vivo";
+  if (/\bagendad/.test(haystack)) return "agendados";
+  if (/\bleads?\b|\binscritos?\b/.test(haystack)) return "leads_do_funil";
+  return null;
 }
 
 function mergeDerivedValues(
   manualValues: FunnelCurrentValue[],
-  agg: FunnelLeadAggregates | undefined
+  agg: FunnelLeadAggregates | undefined,
+  fields: FunnelTemplateField[]
 ): FunnelCurrentValue[] {
   const byKey = new Map<string, FunnelCurrentValue>();
   for (const value of manualValues) byKey.set(value.field_key, value);
 
   const now = new Date().toISOString();
-  for (const key of FUNNEL_DERIVED_FIELD_KEYS) {
-    const existing = byKey.get(key);
+  for (const field of fields) {
+    const aggKey = detectAggregateKey(field.field_key, field.label);
+    if (!aggKey) continue;
+
+    const existing = byKey.get(field.field_key);
     // Manual override vence o derivado.
     if (existing && existing.source === "manual") continue;
 
-    const numeric = agg ? aggregateToValue(key, agg) : 0;
-    byKey.set(key, {
-      field_key: key,
+    const numeric = agg ? agg[aggKey] : 0;
+    byKey.set(field.field_key, {
+      field_key: field.field_key,
       value_numeric: numeric,
       value_text: null,
       source: "derived",
@@ -179,9 +201,11 @@ export async function listFunnelsByMentoria(
   ]);
 
   return rows.map((row) => {
+    const fields = sortFields(row.template?.fields ?? null);
     const merged = mergeDerivedValues(
       valuesByFunnel.get(row.id) ?? [],
-      aggByFunnel.get(row.id)
+      aggByFunnel.get(row.id),
+      fields
     );
     return rowToFunnel(row, merged);
   });
@@ -206,9 +230,11 @@ export async function getFunnelById(
     aggregatesByFunnel(supabase, [data.id]),
   ]);
 
+  const fields = sortFields(data.template?.fields ?? null);
   const merged = mergeDerivedValues(
     valuesByFunnel.get(data.id) ?? [],
-    aggByFunnel.get(data.id)
+    aggByFunnel.get(data.id),
+    fields
   );
   return rowToFunnel(data, merged);
 }

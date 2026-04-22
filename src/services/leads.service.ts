@@ -153,20 +153,98 @@ export async function bulkCreateLeads(
   funnelId: string,
   input: LeadBulkInput,
   options: { actorId?: string | null } = {}
-): Promise<{ inserted: number }> {
-  const rows = input.leads.map((lead) => ({
-    ...toRow(lead),
-    funnel_id: funnelId,
-    created_by: options.actorId ?? null,
-  }));
+): Promise<{ inserted: number; updated: number }> {
+  type ExistingLead = {
+    id: string;
+    name: string;
+    phone: string | null;
+    instagram_handle: string | null;
+    revenue: number | null;
+    niche: string | null;
+  };
 
-  const chunkSize = 500;
+  // Busca leads existentes do funil pra fazer match + merge-fill.
+  const { data: existing } = await supabase
+    .from("mentoria_leads")
+    .select("id, name, phone, instagram_handle, revenue, niche")
+    .eq("funnel_id", funnelId)
+    .is("deleted_at", null)
+    .limit(20_000)
+    .returns<ExistingLead[]>();
+
+  const byPhone = new Map<string, ExistingLead>();
+  const byHandle = new Map<string, ExistingLead>();
+  const byName = new Map<string, ExistingLead>();
+
+  for (const lead of existing ?? []) {
+    const phoneKey = phoneIndexKey(lead.phone);
+    if (phoneKey && !byPhone.has(phoneKey)) byPhone.set(phoneKey, lead);
+    const handleKey = normalizeHandle(lead.instagram_handle);
+    if (handleKey && !byHandle.has(handleKey)) byHandle.set(handleKey, lead);
+    const nameKey = normalizeName(lead.name);
+    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, lead);
+  }
+
+  const toInsert: LeadCreateInput[] = [];
+  const updates: { id: string; patch: Record<string, unknown> }[] = [];
+
+  for (const lead of input.leads) {
+    const phoneKey = phoneIndexKey(lead.phone);
+    let match: ExistingLead | undefined;
+    if (phoneKey) match = byPhone.get(phoneKey);
+    if (!match) {
+      const handleKey = normalizeHandle(lead.instagram_handle);
+      if (handleKey) match = byHandle.get(handleKey);
+    }
+    if (!match) {
+      const nameKey = normalizeName(lead.name);
+      if (nameKey) match = byName.get(nameKey);
+    }
+
+    if (!match) {
+      toInsert.push(lead);
+      continue;
+    }
+
+    // Merge-fill: preenche só campos vazios no existente.
+    const patch: Record<string, unknown> = {};
+    if (!match.phone && lead.phone) patch.phone = lead.phone;
+    if (!match.instagram_handle && lead.instagram_handle)
+      patch.instagram_handle = lead.instagram_handle;
+    if ((match.revenue == null) && lead.revenue != null)
+      patch.revenue = lead.revenue;
+    if (!match.niche && lead.niche) patch.niche = lead.niche;
+
+    if (Object.keys(patch).length > 0) {
+      updates.push({ id: match.id, patch });
+    }
+  }
+
+  // Insere os novos em chunks.
   let inserted = 0;
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize);
-    const { error } = await supabase.from("mentoria_leads").insert(chunk);
-    if (error) throw error;
-    inserted += chunk.length;
+  if (toInsert.length > 0) {
+    const rows = toInsert.map((lead) => ({
+      ...toRow(lead),
+      funnel_id: funnelId,
+      created_by: options.actorId ?? null,
+    }));
+    const chunkSize = 500;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const { error } = await supabase.from("mentoria_leads").insert(chunk);
+      if (error) throw error;
+      inserted += chunk.length;
+    }
+  }
+
+  // Atualiza os existentes (um por um, patches pequenos).
+  let updated = 0;
+  for (const { id, patch } of updates) {
+    const { error } = await supabase
+      .from("mentoria_leads")
+      .update(patch)
+      .eq("id", id);
+    if (!error) updated += 1;
   }
 
   await logAudit(supabase, {
@@ -174,17 +252,19 @@ export async function bulkCreateLeads(
     action: "create",
     entityType: "lead_bulk",
     entityId: funnelId,
-    changes: { meta: { count: inserted } },
+    changes: { meta: { inserted, updated, total: input.leads.length } },
   });
 
-  const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
-  if (mentoriaId) {
-    await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
-      actorId: options.actorId ?? null,
-    });
+  if (inserted > 0 || updated > 0) {
+    const mentoriaId = await getMentoriaIdByFunnel(supabase, funnelId);
+    if (mentoriaId) {
+      await recalcMentoriaMetricsFromLeads(supabase, mentoriaId, {
+        actorId: options.actorId ?? null,
+      });
+    }
   }
 
-  return { inserted };
+  return { inserted, updated };
 }
 
 export async function updateLead(
