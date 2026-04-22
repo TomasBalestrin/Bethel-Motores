@@ -180,6 +180,7 @@ interface MentoriaRow {
     | null;
   latest_metrics:
     | {
+        total_leads: number | null;
         leads_grupo: number | null;
         leads_ao_vivo: number | null;
         agendamentos: number | null;
@@ -202,6 +203,7 @@ const MENTORIA_SELECT = `
   specialist:social_profiles!mentorias_specialist_id_fkey(id, name, slug),
   funnels_rel:funnels(id, deleted_at),
   latest_metrics:mentoria_metrics(
+    total_leads,
     leads_grupo,
     leads_ao_vivo,
     agendamentos,
@@ -241,6 +243,7 @@ function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
     status: row.status,
     specialist: row.specialist ?? null,
     funnels_count: funnelsCount,
+    total_leads: Number(latest?.total_leads ?? 0),
     leads_grupo: leadsGrupo,
     leads_ao_vivo: leadsAoVivo,
     agendamentos,

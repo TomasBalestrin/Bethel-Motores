@@ -41,6 +41,7 @@ export interface MentoriaWithMetrics {
   status: MentoriaStatus;
   specialist: MentoriaSpecialist | null;
   funnels_count: number;
+  total_leads: number;
   leads_grupo: number;
   leads_ao_vivo: number;
   agendamentos: number;

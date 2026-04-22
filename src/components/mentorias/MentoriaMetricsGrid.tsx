@@ -17,6 +17,7 @@ function zeroMetrics(): MentoriaWithMetrics {
     status: "em_andamento",
     specialist: null,
     funnels_count: 0,
+    total_leads: 0,
     leads_grupo: 0,
     leads_ao_vivo: 0,
     agendamentos: 0,
@@ -88,6 +89,7 @@ export function MentoriaMetricsGrid({
       </Card>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Total de Leads" value={data.total_leads} format="integer" />
         <MetricCard label="Leads no Grupo" value={data.leads_grupo} format="integer" />
         <MetricCard label="Leads Ao Vivo" value={data.leads_ao_vivo} format="integer" />
         <MetricCard label="Agendamentos" value={data.agendamentos} format="integer" />

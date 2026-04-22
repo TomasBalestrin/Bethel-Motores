@@ -401,6 +401,7 @@ export async function recalcMentoriaMetricsFromLeads(
   const funnelIds = (funnels ?? []).map((row) => row.id);
   const baseline = await latestManualSnapshot(supabase, mentoriaId);
 
+  let total_leads = 0;
   let leads_grupo = 0;
   let leads_ao_vivo = 0;
   let agendamentos = 0;
@@ -422,6 +423,7 @@ export async function recalcMentoriaMetricsFromLeads(
     if (leadsError) return;
 
     for (const lead of leads ?? []) {
+      total_leads += 1;
       if (lead.joined_group) leads_grupo += 1;
       if (lead.attended) leads_ao_vivo += 1;
       if (lead.scheduled) agendamentos += 1;
@@ -435,6 +437,7 @@ export async function recalcMentoriaMetricsFromLeads(
 
   const snapshot = {
     mentoria_id: mentoriaId,
+    total_leads,
     leads_grupo,
     leads_ao_vivo,
     agendamentos,
