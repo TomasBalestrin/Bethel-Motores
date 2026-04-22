@@ -217,7 +217,20 @@ const MENTORIA_SELECT = `
   )
 `;
 
-function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
+interface LiveLeadStats {
+  total_leads: number;
+  leads_grupo: number;
+  leads_ao_vivo: number;
+  agendamentos: number;
+  vendas: number;
+  valor_vendas: number;
+  valor_entrada: number;
+}
+
+function toMentoriaDTO(
+  row: MentoriaRow,
+  live?: LiveLeadStats | null
+): MentoriaWithMetrics {
   const snapshots = row.latest_metrics ?? [];
   const latest = snapshots.length
     ? [...snapshots].sort(
@@ -226,11 +239,16 @@ function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
       )[0] ?? null
     : null;
 
-  const leadsGrupo = Number(latest?.leads_grupo ?? 0);
-  const leadsAoVivo = Number(latest?.leads_ao_vivo ?? 0);
-  const agendamentos = Number(latest?.agendamentos ?? 0);
+  // Métricas derivadas de leads: usa dados ao vivo quando disponível.
+  // Métricas manuais (calls, investimentos): sempre do snapshot.
+  const totalLeads = live ? Number(live.total_leads) : Number(latest?.total_leads ?? 0);
+  const leadsGrupo = live ? Number(live.leads_grupo) : Number(latest?.leads_grupo ?? 0);
+  const leadsAoVivo = live ? Number(live.leads_ao_vivo) : Number(latest?.leads_ao_vivo ?? 0);
+  const agendamentos = live ? Number(live.agendamentos) : Number(latest?.agendamentos ?? 0);
+  const vendas = live ? Number(live.vendas) : Number(latest?.vendas ?? 0);
+  const valorVendas = live ? Number(live.valor_vendas) : Number(latest?.valor_vendas ?? 0);
+  const valorEntrada = live ? Number(live.valor_entrada) : Number(latest?.valor_entrada ?? 0);
   const callsRealizadas = Number(latest?.calls_realizadas ?? 0);
-  const vendas = Number(latest?.vendas ?? 0);
 
   const funnelsCount = (row.funnels_rel ?? []).filter(
     (f) => f.deleted_at === null
@@ -243,14 +261,14 @@ function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
     status: row.status,
     specialist: row.specialist ?? null,
     funnels_count: funnelsCount,
-    total_leads: Number(latest?.total_leads ?? 0),
+    total_leads: totalLeads,
     leads_grupo: leadsGrupo,
     leads_ao_vivo: leadsAoVivo,
     agendamentos,
     calls_realizadas: callsRealizadas,
     vendas,
-    valor_vendas: Number(latest?.valor_vendas ?? 0),
-    valor_entrada: Number(latest?.valor_entrada ?? 0),
+    valor_vendas: valorVendas,
+    valor_entrada: valorEntrada,
     investimento_trafego: Number(latest?.investimento_trafego ?? 0),
     investimento_api: Number(latest?.investimento_api ?? 0),
     last_metric_at: latest?.captured_at ?? null,
@@ -302,7 +320,7 @@ export async function listMentorias(
   const { data, error } = await query.returns<MentoriaRow[]>();
   if (error) throw error;
 
-  const mentorias = (data ?? []).map(toMentoriaDTO);
+  const mentorias = (data ?? []).map((row) => toMentoriaDTO(row));
   return applySort(mentorias, filters.sort);
 }
 
@@ -1013,14 +1031,19 @@ export async function getMentoriaWithMetricsById(
   supabase: SupabaseClient,
   mentoriaId: string
 ): Promise<MentoriaWithMetrics | null> {
-  const { data, error } = await supabase
-    .from("mentorias")
-    .select(MENTORIA_SELECT)
-    .eq("id", mentoriaId)
-    .is("deleted_at", null)
-    .maybeSingle<MentoriaRow>();
+  const [{ data, error }, { data: liveStats }] = await Promise.all([
+    supabase
+      .from("mentorias")
+      .select(MENTORIA_SELECT)
+      .eq("id", mentoriaId)
+      .is("deleted_at", null)
+      .maybeSingle<MentoriaRow>(),
+    supabase
+      .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
+      .maybeSingle<LiveLeadStats>(),
+  ]);
 
   if (error) throw error;
   if (!data) return null;
-  return toMentoriaDTO(data);
+  return toMentoriaDTO(data, liveStats);
 }

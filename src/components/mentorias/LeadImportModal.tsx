@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import {
   buildSheetsCsvUrl,
   parseLeadsFromCsv,
+  readFileText,
 } from "@/lib/utils/leads-parse";
 import type { LeadCreateInput } from "@/lib/validators/lead";
 
@@ -90,7 +91,7 @@ export function LeadImportModal({
 
   async function handleFile(file: File) {
     try {
-      const text = await file.text();
+      const text = await readFileText(file);
       const result = parseLeadsFromCsv(text);
       if (result.leads.length === 0) {
         toast.error("Nenhum lead detectado no arquivo", {
