@@ -583,6 +583,33 @@ function pushToIndex<K, V>(map: Map<K, V[]>, key: K, value: V) {
   }
 }
 
+// PostgREST tem max-rows = 1000 por padrão e .limit() não sobrepõe.
+// Paginamos em lotes com .range() até esgotar.
+async function fetchAllLeadsForMatching(
+  supabase: SupabaseClient,
+  funnelIds: string[]
+): Promise<LeadMatchRow[]> {
+  const BATCH = 1000;
+  const all: LeadMatchRow[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("mentoria_leads")
+      .select("id, name, phone, instagram_handle")
+      .in("funnel_id", funnelIds)
+      .is("deleted_at", null)
+      .range(offset, offset + BATCH - 1)
+      .returns<LeadMatchRow[]>();
+    if (error) throw error;
+    const rows = data ?? [];
+    all.push(...rows);
+    if (rows.length < BATCH) break;
+    offset += BATCH;
+    if (offset > 100_000) break; // safety net
+  }
+  return all;
+}
+
 export async function markAttendanceByMatching(
   supabase: SupabaseClient,
   mentoriaId: string,
@@ -603,20 +630,12 @@ export async function markAttendanceByMatching(
     return { matched: 0, updatedLeadIds: [], notMatched: entries };
   }
 
-  const { data: leads, error: leadsError } = await supabase
-    .from("mentoria_leads")
-    .select("id, name, phone, instagram_handle")
-    .in("funnel_id", funnelIds)
-    .is("deleted_at", null)
-    .limit(10_000)
-    .returns<LeadMatchRow[]>();
-
-  if (leadsError) throw leadsError;
+  const leads = await fetchAllLeadsForMatching(supabase, funnelIds);
 
   const byPhone = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
 
-  for (const lead of leads ?? []) {
+  for (const lead of leads) {
     const phoneKey = phoneIndexKey(lead.phone);
     if (phoneKey) pushToIndex(byPhone, phoneKey, lead);
     const nameKey = normalizeName(lead.name);
@@ -701,20 +720,12 @@ export async function markGroupByMatching(
     return { matched: 0, updatedLeadIds: [], notMatched: entries };
   }
 
-  const { data: leads, error: leadsError } = await supabase
-    .from("mentoria_leads")
-    .select("id, name, phone, instagram_handle")
-    .in("funnel_id", funnelIds)
-    .is("deleted_at", null)
-    .limit(10_000)
-    .returns<LeadMatchRow[]>();
-
-  if (leadsError) throw leadsError;
+  const leads = await fetchAllLeadsForMatching(supabase, funnelIds);
 
   const byPhone = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
 
-  for (const lead of leads ?? []) {
+  for (const lead of leads) {
     const phoneKey = phoneIndexKey(lead.phone);
     if (phoneKey) pushToIndex(byPhone, phoneKey, lead);
     const nameKey = normalizeName(lead.name);
