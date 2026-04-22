@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Upload, UserCheck } from "lucide-react";
+import { Plus, Search, Upload, UserCheck, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { LeadsTable } from "./LeadsTable";
 import { LeadFormModal } from "./LeadFormModal";
 import { LeadImportModal } from "./LeadImportModal";
 import { AttendanceImportModal } from "./AttendanceImportModal";
+import { GroupImportModal } from "./GroupImportModal";
 
 interface LeadsPanelProps {
   mentoriaId: string;
@@ -36,6 +37,7 @@ export function LeadsPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [attendanceOpen, setAttendanceOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
 
   const debouncedQuery = useDebounce(query, 300);
   const queryParam = debouncedQuery.trim();
@@ -82,6 +84,14 @@ export function LeadsPanel({
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setGroupOpen(true)}
+          >
+            <Users className="mr-1 h-4 w-4" />
+            Importar grupos
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -170,6 +180,14 @@ export function LeadsPanel({
         mentoriaName={mentoriaName}
         open={attendanceOpen}
         onOpenChange={setAttendanceOpen}
+        onSuccess={handleAttendanceMutated}
+      />
+
+      <GroupImportModal
+        mentoriaId={mentoriaId}
+        mentoriaName={mentoriaName}
+        open={groupOpen}
+        onOpenChange={setGroupOpen}
         onSuccess={handleAttendanceMutated}
       />
     </div>
