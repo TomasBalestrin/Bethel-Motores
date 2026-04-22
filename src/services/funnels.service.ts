@@ -144,14 +144,24 @@ function detectAggregateKey(
   if (/valor.*venda|venda.*valor/.test(haystack)) return "valor_em_venda";
   if (haystack.includes("venda")) return "vendas";
   if (haystack.includes("grupo")) return "no_grupo";
+  // Ao vivo / compareceu — testar antes de "presença" porque "compareceu ao vivo"
+  // poderia conter ambos.
   if (
-    haystack.includes("vivo") ||
+    haystack.includes("ao vivo") ||
+    haystack.includes(" vivo") ||
+    haystack.startsWith("vivo") ||
     haystack.includes("compareceu") ||
-    haystack.includes("compareceram") ||
+    haystack.includes("compareceram")
+  )
+    return "ao_vivo";
+  // Confirmaram presença
+  if (
+    haystack.includes("confirma") ||
+    haystack.includes("confirmad") ||
     haystack.includes("presenca") ||
     haystack.includes("presente")
   )
-    return "ao_vivo";
+    return "confirmaram";
   if (haystack.includes("agendad") || haystack.includes("agendamento"))
     return "agendados";
   if (
