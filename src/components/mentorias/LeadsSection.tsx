@@ -12,10 +12,16 @@ interface FunnelOption {
 }
 
 interface LeadsSectionProps {
+  mentoriaId: string;
+  mentoriaName: string;
   funnels: FunnelOption[];
 }
 
-export function LeadsSection({ funnels }: LeadsSectionProps) {
+export function LeadsSection({
+  mentoriaId,
+  mentoriaName,
+  funnels,
+}: LeadsSectionProps) {
   const [activeId, setActiveId] = useState<string>(() => funnels[0]?.id ?? "");
 
   if (funnels.length === 0) return null;
@@ -48,7 +54,13 @@ export function LeadsSection({ funnels }: LeadsSectionProps) {
 
       {funnels.map((funnel) =>
         funnel.id === activeId ? (
-          <LeadsPanel key={funnel.id} funnelId={funnel.id} funnelName={funnel.name} />
+          <LeadsPanel
+            key={funnel.id}
+            mentoriaId={mentoriaId}
+            mentoriaName={mentoriaName}
+            funnelId={funnel.id}
+            funnelName={funnel.name}
+          />
         ) : null
       )}
     </section>

@@ -13,6 +13,11 @@ import type {
   FunnelSnapshotInput,
 } from "@/lib/validators/funnel";
 import { logAudit } from "@/services/audit.service";
+import {
+  aggregatesByFunnel,
+  FUNNEL_DERIVED_FIELD_KEYS,
+  type FunnelLeadAggregates,
+} from "@/services/leads.service";
 
 const FUNNEL_SELECT = `
   id,
@@ -120,6 +125,39 @@ async function fetchCurrentValues(
   return map;
 }
 
+function aggregateToValue(
+  fieldKey: (typeof FUNNEL_DERIVED_FIELD_KEYS)[number],
+  agg: FunnelLeadAggregates
+): number {
+  return agg[fieldKey];
+}
+
+function mergeDerivedValues(
+  manualValues: FunnelCurrentValue[],
+  agg: FunnelLeadAggregates | undefined
+): FunnelCurrentValue[] {
+  const byKey = new Map<string, FunnelCurrentValue>();
+  for (const value of manualValues) byKey.set(value.field_key, value);
+
+  const now = new Date().toISOString();
+  for (const key of FUNNEL_DERIVED_FIELD_KEYS) {
+    const existing = byKey.get(key);
+    // Manual override vence o derivado.
+    if (existing && existing.source === "manual") continue;
+
+    const numeric = agg ? aggregateToValue(key, agg) : 0;
+    byKey.set(key, {
+      field_key: key,
+      value_numeric: numeric,
+      value_text: null,
+      source: "derived",
+      captured_at: existing?.captured_at ?? now,
+    });
+  }
+
+  return Array.from(byKey.values());
+}
+
 export async function listFunnelsByMentoria(
   supabase: SupabaseClient,
   mentoriaId: string
@@ -134,12 +172,19 @@ export async function listFunnelsByMentoria(
 
   if (error) throw error;
   const rows = data ?? [];
-  const valuesByFunnel = await fetchCurrentValues(
-    supabase,
-    rows.map((row) => row.id)
-  );
+  const ids = rows.map((row) => row.id);
+  const [valuesByFunnel, aggByFunnel] = await Promise.all([
+    fetchCurrentValues(supabase, ids),
+    aggregatesByFunnel(supabase, ids),
+  ]);
 
-  return rows.map((row) => rowToFunnel(row, valuesByFunnel.get(row.id) ?? []));
+  return rows.map((row) => {
+    const merged = mergeDerivedValues(
+      valuesByFunnel.get(row.id) ?? [],
+      aggByFunnel.get(row.id)
+    );
+    return rowToFunnel(row, merged);
+  });
 }
 
 export async function getFunnelById(
@@ -156,8 +201,16 @@ export async function getFunnelById(
   if (error) throw error;
   if (!data) return null;
 
-  const valuesByFunnel = await fetchCurrentValues(supabase, [data.id]);
-  return rowToFunnel(data, valuesByFunnel.get(data.id) ?? []);
+  const [valuesByFunnel, aggByFunnel] = await Promise.all([
+    fetchCurrentValues(supabase, [data.id]),
+    aggregatesByFunnel(supabase, [data.id]),
+  ]);
+
+  const merged = mergeDerivedValues(
+    valuesByFunnel.get(data.id) ?? [],
+    aggByFunnel.get(data.id)
+  );
+  return rowToFunnel(data, merged);
 }
 
 export interface CreateFunnelOptions {

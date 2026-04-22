@@ -62,6 +62,7 @@ const METRIC_SOURCE_LABELS: Record<MetricSource, string> = {
   manual: "Manual",
   webhook: "Webhook",
   api: "API",
+  derived: "Lista de leads",
 };
 
 function sanitizeKey(raw: string): string {
@@ -263,11 +264,13 @@ export function FunnelFieldEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {METRIC_SOURCES.map((source) => (
-                    <SelectItem key={source} value={source}>
-                      {METRIC_SOURCE_LABELS[source]}
-                    </SelectItem>
-                  ))}
+                  {METRIC_SOURCES.filter((source) => source !== "derived").map(
+                    (source) => (
+                      <SelectItem key={source} value={source}>
+                        {METRIC_SOURCE_LABELS[source]}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
             </div>

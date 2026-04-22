@@ -7,6 +7,7 @@ import {
   Clock,
   ExternalLink,
   Globe,
+  ListChecks,
   PencilLine,
   Plug,
   User as UserIcon,
@@ -28,6 +29,13 @@ interface FunnelCardProps {
 }
 
 function SourceIcon({ source }: { source: MetricSource }) {
+  if (source === "derived")
+    return (
+      <ListChecks
+        className="h-3 w-3 text-primary"
+        aria-label="Derivado da lista"
+      />
+    );
   if (source === "webhook")
     return <Plug className="h-3 w-3 text-accent" aria-label="webhook" />;
   if (source === "api")

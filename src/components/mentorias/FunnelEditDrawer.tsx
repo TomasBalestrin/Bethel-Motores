@@ -162,11 +162,15 @@ export function FunnelEditDrawer({
                     </Label>
                     {locked ? (
                       <span
-                        title={`Vem automaticamente de ${source}`}
+                        title={
+                          source === "derived"
+                            ? "Derivado da lista de leads"
+                            : `Vem automaticamente de ${source}`
+                        }
                         className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"
                       >
                         <Lock className="h-3 w-3" />
-                        {source}
+                        {source === "derived" ? "lista" : source}
                       </span>
                     ) : null}
                   </div>
