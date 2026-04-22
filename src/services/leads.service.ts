@@ -416,6 +416,7 @@ export async function recalcMentoriaMetricsFromLeads(
       )
       .in("funnel_id", funnelIds)
       .is("deleted_at", null)
+      .limit(100_000)
       .returns<LeadAggregateRow[]>();
 
     if (leadsError) return;
@@ -745,6 +746,7 @@ export async function aggregatesByFunnel(
     )
     .in("funnel_id", funnelIds)
     .is("deleted_at", null)
+    .limit(100_000)
     .returns<LeadAggregateSourceRow[]>();
 
   if (error || !data) return map;
