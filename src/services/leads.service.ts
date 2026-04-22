@@ -583,12 +583,21 @@ function pushToIndex<K, V>(map: Map<K, V[]>, key: K, value: V) {
   }
 }
 
-// PostgREST tem max-rows = 1000 por padrão e .limit() não sobrepõe.
-// Paginamos em lotes com .range() até esgotar.
+// RPC garante retorno completo (sem max-rows do PostgREST).
+// Fallback paginado em lotes com .order("id") + .range() caso a RPC não esteja disponível.
 async function fetchAllLeadsForMatching(
   supabase: SupabaseClient,
+  mentoriaId: string,
   funnelIds: string[]
 ): Promise<LeadMatchRow[]> {
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "get_mentoria_leads_for_matching",
+    { p_mentoria_id: mentoriaId }
+  );
+  if (!rpcError && Array.isArray(rpcData)) {
+    return rpcData as LeadMatchRow[];
+  }
+
   const BATCH = 1000;
   const all: LeadMatchRow[] = [];
   let offset = 0;
@@ -598,6 +607,7 @@ async function fetchAllLeadsForMatching(
       .select("id, name, phone, instagram_handle")
       .in("funnel_id", funnelIds)
       .is("deleted_at", null)
+      .order("id", { ascending: true })
       .range(offset, offset + BATCH - 1)
       .returns<LeadMatchRow[]>();
     if (error) throw error;
@@ -605,7 +615,7 @@ async function fetchAllLeadsForMatching(
     all.push(...rows);
     if (rows.length < BATCH) break;
     offset += BATCH;
-    if (offset > 100_000) break; // safety net
+    if (offset > 100_000) break;
   }
   return all;
 }
@@ -630,7 +640,7 @@ export async function markAttendanceByMatching(
     return { matched: 0, updatedLeadIds: [], notMatched: entries };
   }
 
-  const leads = await fetchAllLeadsForMatching(supabase, funnelIds);
+  const leads = await fetchAllLeadsForMatching(supabase, mentoriaId, funnelIds);
 
   const byPhone = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
@@ -720,7 +730,7 @@ export async function markGroupByMatching(
     return { matched: 0, updatedLeadIds: [], notMatched: entries };
   }
 
-  const leads = await fetchAllLeadsForMatching(supabase, funnelIds);
+  const leads = await fetchAllLeadsForMatching(supabase, mentoriaId, funnelIds);
 
   const byPhone = new Map<string, LeadMatchRow[]>();
   const byName = new Map<string, LeadMatchRow[]>();
