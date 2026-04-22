@@ -98,6 +98,57 @@ export async function listLeadsByFunnelPaginated(
   };
 }
 
+export async function listLeadsByMentoriaPaginated(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  page = 1,
+  pageSize = 100,
+  query?: string
+): Promise<LeadsPage> {
+  const { data: funnelRows } = await supabase
+    .from("funnels")
+    .select("id")
+    .eq("mentoria_id", mentoriaId)
+    .is("deleted_at", null)
+    .returns<{ id: string }[]>();
+
+  const funnelIds = (funnelRows ?? []).map((f) => f.id);
+  if (funnelIds.length === 0) {
+    return { entries: [], total: 0, page, pageSize };
+  }
+
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.min(500, Math.max(10, Math.floor(pageSize)));
+  const from = (safePage - 1) * safeSize;
+  const to = from + safeSize - 1;
+
+  let builder = supabase
+    .from("mentoria_leads")
+    .select(LEAD_COLUMNS, { count: "exact" })
+    .in("funnel_id", funnelIds)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  const term = query?.trim();
+  if (term && term.length > 0) {
+    const like = `%${term}%`;
+    builder = builder.or(
+      `name.ilike.${like},phone.ilike.${like},instagram_handle.ilike.${like},niche.ilike.${like}`
+    );
+  }
+
+  const { data, error, count } = await builder.returns<Lead[]>();
+  if (error) throw error;
+
+  return {
+    entries: data ?? [],
+    total: count ?? (data?.length ?? 0),
+    page: safePage,
+    pageSize: safeSize,
+  };
+}
+
 export async function countLeadsByFunnel(
   supabase: SupabaseClient,
   funnelId: string

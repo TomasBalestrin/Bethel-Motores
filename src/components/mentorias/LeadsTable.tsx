@@ -26,6 +26,7 @@ interface LeadsTableProps {
   leads: Lead[];
   loading: boolean;
   onMutated: () => void;
+  funnelNames?: Record<string, string>;
 }
 
 const ROW_HEIGHT = 48;
@@ -135,12 +136,13 @@ function MoneyInlineInput({
 
 interface LeadRowProps {
   lead: Lead;
+  funnelName?: string;
   onPatched: (id: string, patch: Partial<Lead>) => void;
   onEdit: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
 }
 
-function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
+function LeadRow({ lead, funnelName, onPatched, onEdit, onDelete }: LeadRowProps) {
   async function patch(body: Partial<Lead>) {
     const before: Partial<Lead> = {};
     for (const key of Object.keys(body) as (keyof Lead)[]) {
@@ -172,7 +174,14 @@ function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
       className="grid items-center gap-2 border-b border-border px-3 text-xs hover:bg-muted/30"
       style={{ gridTemplateColumns: GRID_COLS, height: ROW_HEIGHT }}
     >
-      <div className="truncate font-medium">{lead.name}</div>
+      <div className="min-w-0">
+        <div className="truncate font-medium">{lead.name}</div>
+        {funnelName ? (
+          <div className="truncate text-[10px] leading-tight text-muted-foreground">
+            {funnelName}
+          </div>
+        ) : null}
+      </div>
       <div className="truncate text-muted-foreground">{lead.phone ?? "—"}</div>
       <div className="truncate text-muted-foreground">
         {lead.instagram_handle
@@ -229,7 +238,7 @@ function LeadRow({ lead, onPatched, onEdit, onDelete }: LeadRowProps) {
   );
 }
 
-export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
+export function LeadsTable({ leads, loading, onMutated, funnelNames }: LeadsTableProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, Partial<Lead>>>(
     {}
@@ -353,6 +362,7 @@ export function LeadsTable({ leads, loading, onMutated }: LeadsTableProps) {
                 >
                   <LeadRow
                     lead={lead}
+                    funnelName={funnelNames?.[lead.funnel_id]}
                     onPatched={handleOptimistic}
                     onEdit={setEditing}
                     onDelete={setDeleting}

@@ -3,22 +3,31 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LeadsPage } from "@/types/lead";
 
-interface UseLeadsParams {
-  funnelId: string;
+interface UseLeadsByMentoriaParams {
+  mentoriaId: string;
   page: number;
   pageSize?: number;
   query?: string;
 }
 
-export function leadsQueryKey(params: UseLeadsParams) {
-  return ["leads", params.funnelId, params.page, params.pageSize ?? 100, params.query ?? ""] as const;
+export function mentoriaLeadsQueryKey(params: UseLeadsByMentoriaParams) {
+  return [
+    "leads-mentoria",
+    params.mentoriaId,
+    params.page,
+    params.pageSize ?? 100,
+    params.query ?? "",
+  ] as const;
 }
 
-export function useLeads(params: UseLeadsParams) {
+export function useLeadsByMentoria(params: UseLeadsByMentoriaParams) {
   return useQuery<LeadsPage>({
-    queryKey: leadsQueryKey(params),
+    queryKey: mentoriaLeadsQueryKey(params),
     queryFn: async () => {
-      const url = new URL(`/api/funnels/${params.funnelId}/leads`, window.location.origin);
+      const url = new URL(
+        `/api/mentorias/${params.mentoriaId}/leads`,
+        window.location.origin
+      );
       url.searchParams.set("page", String(params.page));
       url.searchParams.set("page_size", String(params.pageSize ?? 100));
       if (params.query && params.query.trim().length > 0) {
@@ -39,14 +48,10 @@ export function useLeads(params: UseLeadsParams) {
   });
 }
 
-export function useInvalidateLeads() {
+export function useInvalidateMentoriaLeads() {
   const qc = useQueryClient();
-  return (funnelId?: string) => {
-    void qc.invalidateQueries({
-      queryKey: funnelId ? ["leads", funnelId] : ["leads"],
+  return (mentoriaId?: string) =>
+    qc.invalidateQueries({
+      queryKey: mentoriaId ? ["leads-mentoria", mentoriaId] : ["leads-mentoria"],
     });
-    if (!funnelId) {
-      void qc.invalidateQueries({ queryKey: ["leads-mentoria"] });
-    }
-  };
 }
