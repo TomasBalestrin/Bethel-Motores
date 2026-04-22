@@ -16,6 +16,7 @@ export function MentoriaTabs({ mentoriaId }: MentoriaTabsProps) {
     { href: base, label: "Dashboard", exact: true },
     { href: `${base}/trafego`, label: "Tráfego" },
     { href: `${base}/disparos`, label: "Disparos" },
+    { href: `${base}/listas`, label: "Listas" },
   ];
 
   return (

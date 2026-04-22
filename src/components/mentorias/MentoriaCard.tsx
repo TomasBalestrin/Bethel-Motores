@@ -110,6 +110,14 @@ export function MentoriaCard({ mentoria }: MentoriaCardProps) {
                 {mentoria.specialist.name}
               </Badge>
             ) : null}
+            <Badge
+              variant="outline"
+              className="rounded-full border-border text-[11px] text-muted-foreground"
+            >
+              {mentoria.funnels_count === 1
+                ? "1 funil"
+                : `${mentoria.funnels_count} funis`}
+            </Badge>
           </div>
         </header>
 
