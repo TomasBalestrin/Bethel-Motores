@@ -207,9 +207,8 @@ export function AttendanceImportModal({
           </DialogTitle>
           <DialogDescription>
             Cada linha será comparada com os leads de{" "}
-            <strong>todos os funis</strong> desta mentoria. A ordem de match
-            é <strong>telefone → @ Instagram → nome</strong>. Basta uma das
-            colunas por linha.
+            <strong>todos os funis</strong> desta mentoria. Basta{" "}
+            <strong>telefone ou nome</strong> bater para marcar o lead.
           </DialogDescription>
         </DialogHeader>
 
