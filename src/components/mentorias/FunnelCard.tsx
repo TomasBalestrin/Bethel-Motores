@@ -68,7 +68,9 @@ export function FunnelCard({ funnel, onEdit }: FunnelCardProps) {
     return map;
   }, [funnel.values]);
 
-  const fields = funnel.template?.fields ?? [];
+  const fields = (funnel.template?.fields ?? []).filter(
+    (field) => field.field_type !== "url"
+  );
 
   return (
     <Card className="flex flex-col gap-3 p-5">

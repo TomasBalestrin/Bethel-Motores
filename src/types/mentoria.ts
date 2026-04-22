@@ -40,6 +40,7 @@ export interface MentoriaWithMetrics {
   scheduled_at: string;
   status: MentoriaStatus;
   specialist: MentoriaSpecialist | null;
+  funnels_count: number;
   leads_grupo: number;
   leads_ao_vivo: number;
   agendamentos: number;

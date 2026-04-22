@@ -1,17 +1,24 @@
 import Link from "next/link";
-import { LineChart } from "lucide-react";
+import { GraduationCap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
+import { MentoriaCard } from "@/components/mentorias/MentoriaCard";
 import { MentoriaFormModal } from "@/components/mentorias/MentoriaFormModal";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   resolvePeriodFromSearchParams,
   type PeriodSearchParams,
 } from "@/lib/utils/period";
 import { createClient } from "@/lib/supabase/server";
-import { getMotorStats, type MotorStatsPayload } from "@/services/mentorias.service";
+import {
+  getMotorStats,
+  listMentorias,
+  type MotorStatsPayload,
+} from "@/services/mentorias.service";
 import { formatDateBR } from "@/lib/utils/format";
+import type { MentoriaWithMetrics } from "@/types/mentoria";
 
 import type { Metadata } from "next";
 
@@ -49,12 +56,18 @@ export default async function MentoriasDashboardPage({ searchParams }: PageProps
   const period = resolvePeriodFromSearchParams(searchParams);
 
   let stats: MotorStatsPayload;
+  let activeMentorias: MentoriaWithMetrics[] = [];
   try {
     const supabase = await createClient();
-    stats = await getMotorStats(supabase, period.range);
+    const [statsResult, list] = await Promise.all([
+      getMotorStats(supabase, period.range),
+      listMentorias(supabase, { status: "em_andamento", sort: "recent" }),
+    ]);
+    stats = statsResult;
+    activeMentorias = list;
   } catch (error) {
     console.error(
-      "[/motors/mentorias] getMotorStats failed:",
+      "[/motors/mentorias] failed:",
       error instanceof Error ? error.message : error
     );
     stats = zeroStats(period.range.from, period.range.to);
@@ -112,16 +125,39 @@ export default async function MentoriasDashboardPage({ searchParams }: PageProps
         />
       </div>
 
-      <section className="flex h-72 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card text-center text-sm text-muted-foreground">
-        <LineChart className="h-6 w-6" aria-hidden />
-        <p>Gráfico de evolução diária (investimento × faturamento)</p>
-        <p className="text-xs">Será conectado ao Recharts em task futura.</p>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-heading text-lg font-semibold">
+              Mentorias em andamento
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {activeMentorias.length === 1
+                ? "1 mentoria ativa"
+                : `${activeMentorias.length} mentorias ativas`}
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/motors/mentorias/listagem">Ver todas</Link>
+          </Button>
+        </div>
+
+        {activeMentorias.length === 0 ? (
+          <EmptyState
+            icon={GraduationCap}
+            title="Nenhuma mentoria em andamento"
+            description="Cadastre uma nova mentoria para começar a acompanhar os números."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {activeMentorias.map((mentoria) => (
+              <MentoriaCard key={mentoria.id} mentoria={mentoria} />
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="flex flex-wrap gap-2">
-        <Button asChild>
-          <Link href="/motors/mentorias/listagem">Ver todas as mentorias</Link>
-        </Button>
         <Button asChild variant="outline">
           <Link href="/motors/mentorias/comparar">Comparar mentorias</Link>
         </Button>

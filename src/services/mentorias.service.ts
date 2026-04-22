@@ -172,6 +172,12 @@ interface MentoriaRow {
     name: string;
     slug: string | null;
   } | null;
+  funnels_rel:
+    | {
+        id: string;
+        deleted_at: string | null;
+      }[]
+    | null;
   latest_metrics:
     | {
         leads_grupo: number | null;
@@ -194,6 +200,7 @@ const MENTORIA_SELECT = `
   scheduled_at,
   status,
   specialist:social_profiles!mentorias_specialist_id_fkey(id, name, slug),
+  funnels_rel:funnels(id, deleted_at),
   latest_metrics:mentoria_metrics(
     leads_grupo,
     leads_ao_vivo,
@@ -223,12 +230,17 @@ function toMentoriaDTO(row: MentoriaRow): MentoriaWithMetrics {
   const callsRealizadas = Number(latest?.calls_realizadas ?? 0);
   const vendas = Number(latest?.vendas ?? 0);
 
+  const funnelsCount = (row.funnels_rel ?? []).filter(
+    (f) => f.deleted_at === null
+  ).length;
+
   return {
     id: row.id,
     name: row.name,
     scheduled_at: row.scheduled_at,
     status: row.status,
     specialist: row.specialist ?? null,
+    funnels_count: funnelsCount,
     leads_grupo: leadsGrupo,
     leads_ao_vivo: leadsAoVivo,
     agendamentos,

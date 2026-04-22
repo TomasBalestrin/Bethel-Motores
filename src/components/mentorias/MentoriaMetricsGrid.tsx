@@ -16,6 +16,7 @@ function zeroMetrics(): MentoriaWithMetrics {
     scheduled_at: "",
     status: "em_andamento",
     specialist: null,
+    funnels_count: 0,
     leads_grupo: 0,
     leads_ao_vivo: 0,
     agendamentos: 0,
