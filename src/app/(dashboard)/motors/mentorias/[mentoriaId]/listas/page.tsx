@@ -3,6 +3,7 @@ import { GraduationCap } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { listFunnelsByMentoria } from "@/services/funnels.service";
 import { countLeadsByFunnel } from "@/services/leads.service";
+import { getMentoriaById } from "@/services/mentorias.service";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { LeadsSection } from "@/components/mentorias/LeadsSection";
 
@@ -15,9 +16,10 @@ interface PageProps {
 export default async function MentoriaListasPage({ params }: PageProps) {
   const supabase = await createClient();
 
-  const funnels = await listFunnelsByMentoria(supabase, params.mentoriaId).catch(
-    () => []
-  );
+  const [funnels, mentoria] = await Promise.all([
+    listFunnelsByMentoria(supabase, params.mentoriaId).catch(() => []),
+    getMentoriaById(supabase, params.mentoriaId).catch(() => null),
+  ]);
 
   if (funnels.length === 0) {
     return (
@@ -39,5 +41,11 @@ export default async function MentoriaListasPage({ params }: PageProps) {
     count: counts[index] ?? 0,
   }));
 
-  return <LeadsSection funnels={funnelOptions} />;
+  return (
+    <LeadsSection
+      mentoriaId={params.mentoriaId}
+      mentoriaName={mentoria?.name ?? "Mentoria"}
+      funnels={funnelOptions}
+    />
+  );
 }

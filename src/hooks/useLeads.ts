@@ -41,5 +41,8 @@ export function useLeads(params: UseLeadsParams) {
 
 export function useInvalidateLeads() {
   const qc = useQueryClient();
-  return (funnelId: string) => qc.invalidateQueries({ queryKey: ["leads", funnelId] });
+  return (funnelId?: string) =>
+    qc.invalidateQueries({
+      queryKey: funnelId ? ["leads", funnelId] : ["leads"],
+    });
 }

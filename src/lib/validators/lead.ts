@@ -49,3 +49,24 @@ export const leadBulkSchema = z.object({
   leads: z.array(leadCreateSchema).min(1).max(5000),
 });
 export type LeadBulkInput = z.infer<typeof leadBulkSchema>;
+
+const attendanceEntrySchema = z
+  .object({
+    name: z.string().trim().max(200).nullable().optional(),
+    phone: z.string().trim().max(40).nullable().optional(),
+    instagram_handle: z.string().trim().max(80).nullable().optional(),
+  })
+  .refine(
+    (value) =>
+      Boolean(
+        (value.name && value.name.length > 0) ||
+          (value.phone && value.phone.length > 0) ||
+          (value.instagram_handle && value.instagram_handle.length > 0)
+      ),
+    { message: "Linha sem nome, telefone ou @" }
+  );
+
+export const attendanceBulkSchema = z.object({
+  entries: z.array(attendanceEntrySchema).min(1).max(10_000),
+});
+export type AttendanceBulkInput = z.infer<typeof attendanceBulkSchema>;

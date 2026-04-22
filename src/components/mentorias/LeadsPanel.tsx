@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Upload } from "lucide-react";
+import { Plus, Search, Upload, UserCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,21 +12,30 @@ import { useLeads, useInvalidateLeads } from "@/hooks/useLeads";
 import { LeadsTable } from "./LeadsTable";
 import { LeadFormModal } from "./LeadFormModal";
 import { LeadImportModal } from "./LeadImportModal";
+import { AttendanceImportModal } from "./AttendanceImportModal";
 
 interface LeadsPanelProps {
+  mentoriaId: string;
+  mentoriaName: string;
   funnelId: string;
   funnelName: string;
 }
 
 const PAGE_SIZE = 100;
 
-export function LeadsPanel({ funnelId, funnelName }: LeadsPanelProps) {
+export function LeadsPanel({
+  mentoriaId,
+  mentoriaName,
+  funnelId,
+  funnelName,
+}: LeadsPanelProps) {
   const router = useRouter();
   const invalidate = useInvalidateLeads();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const debouncedQuery = useDebounce(query, 300);
   const queryParam = debouncedQuery.trim();
@@ -51,6 +60,11 @@ export function LeadsPanel({ funnelId, funnelName }: LeadsPanelProps) {
     router.refresh();
   }
 
+  function handleAttendanceMutated() {
+    invalidate();
+    router.refresh();
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -67,7 +81,15 @@ export function LeadsPanel({ funnelId, funnelName }: LeadsPanelProps) {
             className="pl-8"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAttendanceOpen(true)}
+          >
+            <UserCheck className="mr-1 h-4 w-4" />
+            Importar comparecimento
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
             <Upload className="mr-1 h-4 w-4" />
             Importar
@@ -141,6 +163,14 @@ export function LeadsPanel({ funnelId, funnelName }: LeadsPanelProps) {
         open={importOpen}
         onOpenChange={setImportOpen}
         onSuccess={handleMutated}
+      />
+
+      <AttendanceImportModal
+        mentoriaId={mentoriaId}
+        mentoriaName={mentoriaName}
+        open={attendanceOpen}
+        onOpenChange={setAttendanceOpen}
+        onSuccess={handleAttendanceMutated}
       />
     </div>
   );

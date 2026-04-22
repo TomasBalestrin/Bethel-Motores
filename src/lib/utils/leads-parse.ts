@@ -1,6 +1,7 @@
 import Papa from "papaparse";
 
 import type { LeadCreateInput } from "@/lib/validators/lead";
+import type { AttendanceEntry } from "@/services/leads.service";
 
 const HEADER_SYNONYMS: Record<string, keyof LeadCreateInput> = {
   nome: "name",
@@ -140,4 +141,56 @@ export async function fetchSheetAsCsv(sheetUrl: string): Promise<string> {
     );
   }
   return await response.text();
+}
+
+export interface AttendanceParseResult {
+  entries: AttendanceEntry[];
+  errors: string[];
+  unmappedHeaders: string[];
+}
+
+export function parseAttendanceFromCsv(text: string): AttendanceParseResult {
+  const parsed = Papa.parse<Record<string, string>>(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) => header.trim(),
+  });
+
+  const errors: string[] = parsed.errors
+    .slice(0, 20)
+    .map((err) => `Linha ${err.row ?? "?"}: ${err.message}`);
+
+  const rawHeaders = parsed.meta.fields ?? [];
+  const headerMap = new Map<string, "name" | "phone" | "instagram_handle">();
+  const unmapped: string[] = [];
+
+  for (const header of rawHeaders) {
+    const key = normalizeHeader(header);
+    const mapped = HEADER_SYNONYMS[key];
+    if (mapped === "name" || mapped === "phone" || mapped === "instagram_handle") {
+      headerMap.set(header, mapped);
+    } else {
+      unmapped.push(header);
+    }
+  }
+
+  const entries: AttendanceEntry[] = [];
+  const mapEntries = Array.from(headerMap.entries());
+  for (const row of parsed.data) {
+    let name: string | null = null;
+    let phone: string | null = null;
+    let instagram: string | null = null;
+    for (const [raw, key] of mapEntries) {
+      const value = row[raw];
+      const text = normalizeText(value);
+      if (!text) continue;
+      if (key === "name") name = text;
+      else if (key === "phone") phone = text;
+      else if (key === "instagram_handle") instagram = text;
+    }
+    if (!name && !phone && !instagram) continue;
+    entries.push({ name, phone, instagram_handle: instagram });
+  }
+
+  return { entries, errors, unmappedHeaders: unmapped };
 }
