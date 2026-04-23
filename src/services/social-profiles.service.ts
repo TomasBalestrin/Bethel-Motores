@@ -292,9 +292,7 @@ export async function getProfileDashboardStats(
   supabase: SupabaseClient,
   profileId: string
 ): Promise<ProfileDashboardStats> {
-  const posts = await listPostsByProfile(supabase, profileId).catch(
-    () => [] as ProfilePost[]
-  );
+  const posts = await listPostsByProfile(supabase, profileId);
 
   const active = posts.filter((post) => post.is_active);
 

@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  MeetingBulkImportInput,
   MeetingCreateInput,
+  MeetingImportRow,
   PostAnalysisInput,
   PostCreateInput,
   PostMetricsInput,
@@ -409,4 +411,154 @@ export async function createSignedAnalysisUrl(
     .createSignedUrl(filePath, expiresInSeconds);
   if (error || !data?.signedUrl) return null;
   return data.signedUrl;
+}
+
+export interface BulkImportMeetingsResult {
+  posts_created: number;
+  posts_updated: number;
+  meetings_created: number;
+  metrics_snapshots_created: number;
+  errors: string[];
+}
+
+export async function bulkImportMeetings(
+  supabase: SupabaseClient,
+  profileId: string,
+  input: MeetingBulkImportInput,
+  options: { actorId?: string } = {}
+): Promise<BulkImportMeetingsResult> {
+  const rows = input.rows;
+  const byLink = new Map<string, MeetingImportRow[]>();
+  for (const row of rows) {
+    const list = byLink.get(row.link) ?? [];
+    list.push(row);
+    byLink.set(row.link, list);
+  }
+
+  const result: BulkImportMeetingsResult = {
+    posts_created: 0,
+    posts_updated: 0,
+    meetings_created: 0,
+    metrics_snapshots_created: 0,
+    errors: [],
+  };
+
+  for (const [link, rowsForLink] of Array.from(byLink.entries())) {
+    try {
+      const { data: existing, error: findError } = await supabase
+        .from("posts")
+        .select("id, is_active, posted_at")
+        .eq("social_profile_id", profileId)
+        .eq("link", link)
+        .is("deleted_at", null)
+        .maybeSingle<{ id: string; is_active: boolean; posted_at: string | null }>();
+
+      if (findError) throw findError;
+
+      let postId: string;
+      const earliestPostedAt =
+        rowsForLink
+          .map((r: MeetingImportRow) => r.posted_at)
+          .filter((d: string | null): d is string => Boolean(d))
+          .sort()[0] ?? null;
+      const first = rowsForLink[0];
+      const derivedCode = first?.shortcode ?? `POST-${first?.meeting_date ?? "unknown"}`;
+
+      if (!existing) {
+        const { data: created, error: createError } = await supabase
+          .from("posts")
+          .insert({
+            social_profile_id: profileId,
+            code: derivedCode,
+            link,
+            posted_at: earliestPostedAt,
+            created_by: options.actorId ?? null,
+          })
+          .select("id")
+          .single<{ id: string }>();
+        if (createError) throw createError;
+        postId = created.id;
+        result.posts_created += 1;
+      } else {
+        postId = existing.id;
+        if (earliestPostedAt && !existing.posted_at) {
+          await supabase
+            .from("posts")
+            .update({ posted_at: earliestPostedAt })
+            .eq("id", postId);
+          result.posts_updated += 1;
+        }
+      }
+
+      const sortedRows = [...rowsForLink].sort(
+        (a: MeetingImportRow, b: MeetingImportRow) =>
+          a.meeting_date.localeCompare(b.meeting_date)
+      );
+
+      for (const row of sortedRows) {
+        let metricsId: string | null = null;
+        if (!row.is_placeholder) {
+          const spend = row.investment ?? 0;
+          const { data: metric, error: metricError } = await supabase
+            .from("post_metrics")
+            .insert({
+              post_id: postId,
+              investment: spend,
+              spend,
+              followers_gained: row.followers_gained ?? 0,
+              likes: 0,
+              comments: 0,
+              shares: 0,
+              saves: 0,
+              reach: 0,
+              impressions: 0,
+              clicks: 0,
+              hook_rate_3s: row.hook_rate_3s,
+              hold_50: row.hold_50,
+              hold_75: row.hold_75,
+              duration_seconds: row.duration_seconds,
+              captured_at: `${row.meeting_date}T12:00:00Z`,
+              captured_by: options.actorId ?? null,
+            })
+            .select("id")
+            .single<{ id: string }>();
+          if (metricError) throw metricError;
+          metricsId = metric.id;
+          result.metrics_snapshots_created += 1;
+        }
+
+        const { error: meetingError } = await supabase
+          .from("post_meetings")
+          .insert({
+            post_id: postId,
+            meeting_type: row.meeting_type,
+            meeting_date: row.meeting_date,
+            metrics_id: metricsId,
+            gancho: row.gancho,
+            headline: row.headline,
+            assunto: row.assunto,
+            created_by: options.actorId ?? null,
+          });
+        if (meetingError) throw meetingError;
+        result.meetings_created += 1;
+      }
+
+      // Se a reunião mais recente tiver pause_post, marca como inativo
+      const mostRecent = sortedRows[sortedRows.length - 1];
+      if (mostRecent?.pause_post) {
+        await supabase
+          .from("posts")
+          .update({ is_active: false })
+          .eq("id", postId);
+      }
+    } catch (error) {
+      const message =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: unknown }).message)
+          : String(error);
+      result.errors.push(`${link}: ${message}`);
+    }
+  }
+
+  return result;
 }

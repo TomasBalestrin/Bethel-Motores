@@ -53,3 +53,28 @@ export const meetingCreateSchema = z.object({
   metrics: postMetricsSchema,
 });
 export type MeetingCreateInput = z.infer<typeof meetingCreateSchema>;
+
+const meetingImportRowSchema = z.object({
+  link: z.string().url().max(2048),
+  shortcode: z.string().nullable(),
+  meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  meeting_type: z.enum(["terca", "sexta"]),
+  posted_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  investment: z.number().nullable(),
+  followers_gained: z.number().nullable(),
+  hook_rate_3s: z.number().nullable(),
+  hold_50: z.number().nullable(),
+  hold_75: z.number().nullable(),
+  duration_seconds: z.number().int().nullable(),
+  gancho: z.string().max(2000).nullable(),
+  headline: z.string().max(2000).nullable(),
+  assunto: z.string().max(2000).nullable(),
+  pause_post: z.boolean(),
+  is_placeholder: z.boolean(),
+});
+
+export const meetingBulkImportSchema = z.object({
+  rows: z.array(meetingImportRowSchema).min(1).max(1000),
+});
+export type MeetingBulkImportInput = z.infer<typeof meetingBulkImportSchema>;
+export type MeetingImportRow = z.infer<typeof meetingImportRowSchema>;

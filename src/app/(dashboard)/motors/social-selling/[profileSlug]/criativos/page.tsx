@@ -8,6 +8,7 @@ import {
 } from "@/services/social-profiles.service";
 import { Card } from "@/components/ui/card";
 import { PostCreateModal } from "@/components/social-selling/PostCreateModal";
+import { MeetingBulkImportButton } from "@/components/social-selling/MeetingBulkImportButton";
 import { PostsTable } from "@/components/social-selling/PostsTable";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,10 @@ export default async function CriativosPage({ params }: PageProps) {
               : `${posts.length} posts cadastrados`}
           </p>
         </div>
-        <PostCreateModal profileId={profile.id} />
+        <div className="flex flex-wrap gap-2">
+          <MeetingBulkImportButton profileId={profile.id} />
+          <PostCreateModal profileId={profile.id} />
+        </div>
       </div>
 
       {loadError ? (
