@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 
 export interface SocialProfileSummary {
   id: string;
@@ -191,20 +192,22 @@ function mapPostRow(row: PostRow): ProfilePost {
   };
 }
 
-export async function getProfileBySlug(
-  supabase: SupabaseClient,
-  slug: string
-): Promise<SocialProfileSummary | null> {
-  const { data, error } = await supabase
-    .from("social_profiles")
-    .select(SOCIAL_PROFILE_COLUMNS)
-    .eq("slug", slug)
-    .is("deleted_at", null)
-    .maybeSingle<SocialProfileSummary>();
+export const getProfileBySlug = cache(
+  async (
+    supabase: SupabaseClient,
+    slug: string
+  ): Promise<SocialProfileSummary | null> => {
+    const { data, error } = await supabase
+      .from("social_profiles")
+      .select(SOCIAL_PROFILE_COLUMNS)
+      .eq("slug", slug)
+      .is("deleted_at", null)
+      .maybeSingle<SocialProfileSummary>();
 
-  if (error) throw error;
-  return data;
-}
+    if (error) throw error;
+    return data;
+  }
+);
 
 export async function listPostsByProfile(
   supabase: SupabaseClient,

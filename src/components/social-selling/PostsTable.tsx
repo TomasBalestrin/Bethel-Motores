@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { ExternalLink, FileText, Gauge, Search, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -52,10 +51,10 @@ interface PostsTableProps {
 }
 
 export function PostsTable({ posts }: PostsTableProps) {
-  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [optimistic, setOptimistic] = useState<Record<string, Partial<ProfilePost>>>({});
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
 
   const [metricsTarget, setMetricsTarget] = useState<ProfilePost | null>(null);
@@ -66,15 +65,18 @@ export function PostsTable({ posts }: PostsTableProps) {
 
   useEffect(() => {
     setOptimistic({});
+    setDeletedIds(new Set());
   }, [posts]);
 
   const decorated = useMemo(
     () =>
-      posts.map((post) => ({
-        ...post,
-        ...(optimistic[post.id] ?? {}),
-      })),
-    [posts, optimistic]
+      posts
+        .filter((post) => !deletedIds.has(post.id))
+        .map((post) => ({
+          ...post,
+          ...(optimistic[post.id] ?? {}),
+        })),
+    [posts, optimistic, deletedIds]
   );
 
   const debouncedQuery = useDebounce(query, 250);
@@ -109,8 +111,12 @@ export function PostsTable({ posts }: PostsTableProps) {
         );
       }
       toast.success("Post excluído");
+      setDeletedIds((prev) => {
+        const next = new Set(prev);
+        next.add(deleteTarget.id);
+        return next;
+      });
       setDeleteTarget(null);
-      router.refresh();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Erro desconhecido";
@@ -141,7 +147,7 @@ export function PostsTable({ posts }: PostsTableProps) {
               : "Erro ao atualizar"
           );
         }
-        router.refresh();
+        // Estado otimista já reflete o valor salvo — não precisa router.refresh().
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Erro desconhecido";

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 
 import type {
   Funnel,
@@ -202,10 +203,10 @@ function mergeDerivedValues(
   return Array.from(byKey.values());
 }
 
-export async function listFunnelsByMentoria(
+export const listFunnelsByMentoria = cache(async (
   supabase: SupabaseClient,
   mentoriaId: string
-): Promise<FunnelWithTemplate[]> {
+): Promise<FunnelWithTemplate[]> => {
   const { data, error } = await supabase
     .from("funnels")
     .select(FUNNEL_SELECT)
@@ -231,7 +232,7 @@ export async function listFunnelsByMentoria(
     );
     return rowToFunnel(row, merged);
   });
-}
+});
 
 export async function getFunnelById(
   supabase: SupabaseClient,
