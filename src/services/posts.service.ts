@@ -76,6 +76,22 @@ export async function updatePost(
   return data;
 }
 
+export async function deletePost(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("posts")
+    .update({
+      deleted_at: new Date().toISOString(),
+      is_active: false,
+    })
+    .eq("id", postId)
+    .is("deleted_at", null);
+
+  if (error) throw error;
+}
+
 export async function insertMetric(
   supabase: SupabaseClient,
   postId: string,
