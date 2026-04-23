@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ export function PostDetailsModal({
   const [meetings, setMeetings] = useState<PostMeeting[]>([]);
   const [loading, setLoading] = useState(false);
   const [createTarget, setCreateTarget] = useState<MeetingType | null>(null);
+  const [editTarget, setEditTarget] = useState<PostMeeting | null>(null);
   const [togglingActive, setTogglingActive] = useState(false);
   const [activeOverride, setActiveOverride] = useState<boolean | null>(null);
 
@@ -180,6 +181,7 @@ export function PostDetailsModal({
               meetings={tercaMeetings}
               loading={loading}
               onCreate={() => setCreateTarget("terca")}
+              onEdit={setEditTarget}
               onDelete={handleDeleteMeeting}
             />
             <MeetingSection
@@ -187,6 +189,7 @@ export function PostDetailsModal({
               meetings={sextaMeetings}
               loading={loading}
               onCreate={() => setCreateTarget("sexta")}
+              onEdit={setEditTarget}
               onDelete={handleDeleteMeeting}
             />
           </div>
@@ -208,6 +211,24 @@ export function PostDetailsModal({
           }}
         />
       ) : null}
+
+      {editTarget ? (
+        <MeetingCreateModal
+          postId={post.id}
+          meetingType={editTarget.meeting_type}
+          mode="edit"
+          editing={editTarget}
+          open={editTarget !== null}
+          onOpenChange={(next) => {
+            if (!next) setEditTarget(null);
+          }}
+          onCreated={async () => {
+            setEditTarget(null);
+            await fetchMeetings();
+            router.refresh();
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -217,12 +238,14 @@ function MeetingSection({
   meetings,
   loading,
   onCreate,
+  onEdit,
   onDelete,
 }: {
   title: string;
   meetings: PostMeeting[];
   loading: boolean;
   onCreate: () => void;
+  onEdit: (meeting: PostMeeting) => void;
   onDelete: (id: string) => void;
 }) {
   return (
@@ -249,9 +272,9 @@ function MeetingSection({
           {meetings.map((meeting) => (
             <li
               key={meeting.id}
-              className="flex items-center justify-between rounded-md bg-muted/30 px-2 py-1.5 text-xs"
+              className="flex items-center justify-between gap-1 rounded-md bg-muted/30 px-2 py-1.5 text-xs"
             >
-              <div className="flex flex-col">
+              <div className="flex min-w-0 flex-1 flex-col">
                 <span className="font-medium">
                   {formatDateBR(meeting.meeting_date)}
                 </span>
@@ -260,17 +283,31 @@ function MeetingSection({
                     {formatCompactNumber(meeting.metrics.impressions)} impressões
                     · {formatCurrency(meeting.metrics.spend)}
                   </span>
-                ) : null}
+                ) : (
+                  <span className="text-[10px] italic text-muted-foreground">
+                    Sem métricas — clique em editar para preencher
+                  </span>
+                )}
               </div>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Excluir reunião"
-                onClick={() => onDelete(meeting.id)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <div className="flex gap-0.5">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Editar reunião"
+                  onClick={() => onEdit(meeting)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Excluir reunião"
+                  onClick={() => onDelete(meeting.id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </li>
           ))}
         </ul>

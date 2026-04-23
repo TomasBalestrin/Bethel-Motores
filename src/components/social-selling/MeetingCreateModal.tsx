@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -18,10 +18,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   meetingCreateSchema,
   type MeetingCreateInput,
 } from "@/lib/validators/post";
-import type { MeetingType } from "@/types/post";
+import type { MeetingType, PostMeeting } from "@/types/post";
 
 interface MeetingCreateModalProps {
   postId: string;
@@ -29,6 +36,8 @@ interface MeetingCreateModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: () => void;
+  mode?: "create" | "edit";
+  editing?: PostMeeting | null;
 }
 
 function todayISO(): string {
@@ -39,83 +48,128 @@ function todayISO(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function defaultsFromMeeting(
+  meeting: PostMeeting | null | undefined,
+  fallbackType: MeetingType
+): MeetingCreateInput {
+  return {
+    meeting_type: meeting?.meeting_type ?? fallbackType,
+    meeting_date: meeting?.meeting_date ?? todayISO(),
+    pause_post: false,
+    metrics: {
+      investment: meeting?.metrics?.investment ?? 0,
+      followers_gained: meeting?.metrics?.followers_gained ?? 0,
+      likes: meeting?.metrics?.likes ?? 0,
+      comments: meeting?.metrics?.comments ?? 0,
+      shares: meeting?.metrics?.shares ?? 0,
+      saves: meeting?.metrics?.saves ?? 0,
+      reach: meeting?.metrics?.reach ?? 0,
+      impressions: meeting?.metrics?.impressions ?? 0,
+      clicks: meeting?.metrics?.clicks ?? 0,
+    },
+  };
+}
+
 export function MeetingCreateModal({
   postId,
   meetingType,
   open,
   onOpenChange,
   onCreated,
+  mode = "create",
+  editing = null,
 }: MeetingCreateModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const form = useForm<MeetingCreateInput>({
     resolver: zodResolver(meetingCreateSchema) as Resolver<MeetingCreateInput>,
-    defaultValues: {
-      meeting_type: meetingType,
-      meeting_date: todayISO(),
-      pause_post: false,
-      metrics: {
-        investment: 0,
-        followers_gained: 0,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        saves: 0,
-        reach: 0,
-        impressions: 0,
-        clicks: 0,
-      },
-    },
+    defaultValues: defaultsFromMeeting(editing, meetingType),
   });
+
+  // Re-hidrata valores quando abre ou muda o meeting editando
+  useEffect(() => {
+    if (open) {
+      form.reset(defaultsFromMeeting(editing, meetingType));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, meetingType]);
 
   async function onSubmit(input: MeetingCreateInput) {
     setSubmitting(true);
     try {
-      const response = await fetch(`/api/posts/${postId}/meetings`, {
-        method: "POST",
+      const isEdit = mode === "edit" && editing;
+      const url = isEdit
+        ? `/api/meetings/${editing.id}`
+        : `/api/posts/${postId}/meetings`;
+      const method = isEdit ? "PATCH" : "POST";
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...input, meeting_type: meetingType }),
+        body: JSON.stringify(input),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
         throw new Error(
           typeof payload?.error === "string"
             ? payload.error
-            : "Erro ao registrar reunião"
+            : "Erro ao salvar reunião"
         );
       }
-      toast.success("Reunião registrada");
+      toast.success(isEdit ? "Reunião atualizada" : "Reunião registrada");
       form.reset();
       onOpenChange(false);
       onCreated?.();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Erro desconhecido";
-      toast.error("Não foi possível registrar", { description: message });
+      toast.error("Não foi possível salvar", { description: message });
     } finally {
       setSubmitting(false);
     }
   }
 
-  const label = meetingType === "terca" ? "terça" : "sexta";
+  const currentType = form.watch("meeting_type");
+  const label = currentType === "terca" ? "terça" : "sexta";
+  const title = mode === "edit" ? `Editar reunião de ${label}` : `Nova reunião de ${label}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nova reunião de {label}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Informe as métricas atualizadas do post nesta reunião.
+            {mode === "edit"
+              ? "Ajuste a data, o tipo ou as métricas da reunião."
+              : "Informe as métricas atualizadas do post nesta reunião."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="meeting-date">Data da reunião</Label>
-            <Input
-              id="meeting-date"
-              type="date"
-              {...form.register("meeting_date")}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="meeting-type">Tipo</Label>
+              <Select
+                value={currentType}
+                onValueChange={(value) =>
+                  form.setValue("meeting_type", value as MeetingType)
+                }
+              >
+                <SelectTrigger id="meeting-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="terca">Terça</SelectItem>
+                  <SelectItem value="sexta">Sexta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="meeting-date">Data da reunião</Label>
+              <Input
+                id="meeting-date"
+                type="date"
+                {...form.register("meeting_date")}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -227,6 +281,8 @@ export function MeetingCreateModal({
                   <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   Salvando...
                 </>
+              ) : mode === "edit" ? (
+                "Salvar alterações"
               ) : (
                 "Salvar reunião"
               )}
