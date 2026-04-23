@@ -43,6 +43,7 @@ import type { ProfilePost } from "@/services/social-profiles.service";
 import { useDebounce } from "@/hooks/useDebounce";
 import { PostMetricsDrawer } from "./PostMetricsDrawer";
 import { PostAnalysisDrawer } from "./PostAnalysisDrawer";
+import { PostDetailsModal } from "./PostDetailsModal";
 
 type Filter = "all" | "fit" | "test" | "inactive";
 
@@ -59,6 +60,7 @@ export function PostsTable({ posts }: PostsTableProps) {
 
   const [metricsTarget, setMetricsTarget] = useState<ProfilePost | null>(null);
   const [analysisTarget, setAnalysisTarget] = useState<ProfilePost | null>(null);
+  const [detailsTarget, setDetailsTarget] = useState<ProfilePost | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProfilePost | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -205,7 +207,11 @@ export function PostsTable({ posts }: PostsTableProps) {
               </TableRow>
             ) : (
               filtered.map((post) => (
-                <TableRow key={post.id}>
+                <TableRow
+                  key={post.id}
+                  onClick={() => setDetailsTarget(post)}
+                  className="cursor-pointer hover:bg-muted/50"
+                >
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{post.code}</span>
@@ -214,7 +220,7 @@ export function PostsTable({ posts }: PostsTableProps) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {post.link ? (
                       <a
                         href={post.link}
@@ -235,7 +241,7 @@ export function PostsTable({ posts }: PostsTableProps) {
                   <TableCell className="text-right tabular-nums">
                     {formatCurrency(post.latest_metrics?.spend ?? 0)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Switch
                       checked={Boolean(post.is_test)}
                       onCheckedChange={(checked) =>
@@ -244,7 +250,7 @@ export function PostsTable({ posts }: PostsTableProps) {
                       aria-label="Em teste"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Switch
                       checked={Boolean(post.is_active)}
                       onCheckedChange={(checked) =>
@@ -253,7 +259,7 @@ export function PostsTable({ posts }: PostsTableProps) {
                       aria-label="Ativo"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <Button
                       size="icon"
                       variant="ghost"
@@ -270,7 +276,7 @@ export function PostsTable({ posts }: PostsTableProps) {
                       />
                     </Button>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       <Button
                         size="sm"
@@ -318,6 +324,13 @@ export function PostsTable({ posts }: PostsTableProps) {
         open={analysisTarget !== null}
         onOpenChange={(open) => {
           if (!open) setAnalysisTarget(null);
+        }}
+      />
+      <PostDetailsModal
+        post={detailsTarget}
+        open={detailsTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailsTarget(null);
         }}
       />
 

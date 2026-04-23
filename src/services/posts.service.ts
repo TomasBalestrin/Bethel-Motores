@@ -1,12 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type {
+  MeetingCreateInput,
   PostAnalysisInput,
   PostCreateInput,
   PostMetricsInput,
   PostPatchInput,
 } from "@/lib/validators/post";
-import type { Post } from "@/types/post";
+import type { Post, PostMeeting } from "@/types/post";
 
 const POST_COLUMNS =
   "id, social_profile_id, code, link, is_fit, is_test, is_active, created_by, created_at, updated_at" as const;
@@ -74,6 +75,156 @@ export async function updatePost(
 
   if (error) throw error;
   return data;
+}
+
+export async function createMeeting(
+  supabase: SupabaseClient,
+  postId: string,
+  input: MeetingCreateInput,
+  options: { actorId?: string } = {}
+): Promise<{ id: string }> {
+  const spend = Number(input.metrics.investment) || 0;
+  const { data: metric, error: metricError } = await supabase
+    .from("post_metrics")
+    .insert({
+      post_id: postId,
+      investment: spend,
+      spend,
+      followers_gained: input.metrics.followers_gained,
+      likes: input.metrics.likes,
+      comments: input.metrics.comments,
+      shares: input.metrics.shares,
+      saves: input.metrics.saves,
+      reach: input.metrics.reach,
+      impressions: input.metrics.impressions,
+      clicks: input.metrics.clicks,
+      captured_at: new Date().toISOString(),
+      captured_by: options.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (metricError) throw metricError;
+
+  const { data: meeting, error: meetingError } = await supabase
+    .from("post_meetings")
+    .insert({
+      post_id: postId,
+      meeting_type: input.meeting_type,
+      meeting_date: input.meeting_date,
+      metrics_id: metric.id,
+      created_by: options.actorId ?? null,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (meetingError) throw meetingError;
+
+  if (input.pause_post) {
+    const { error: pauseError } = await supabase
+      .from("posts")
+      .update({ is_active: false })
+      .eq("id", postId);
+    if (pauseError) throw pauseError;
+  }
+
+  return meeting;
+}
+
+interface MeetingRow {
+  id: string;
+  post_id: string;
+  meeting_type: "terca" | "sexta";
+  meeting_date: string;
+  metrics_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  metrics: {
+    impressions: number | null;
+    reach: number | null;
+    likes: number | null;
+    comments: number | null;
+    shares: number | null;
+    saves: number | null;
+    clicks: number | null;
+    spend: number | null;
+  } | null;
+}
+
+export async function listMeetings(
+  supabase: SupabaseClient,
+  postId: string
+): Promise<PostMeeting[]> {
+  const { data, error } = await supabase
+    .from("post_meetings")
+    .select(
+      `
+        id,
+        post_id,
+        meeting_type,
+        meeting_date,
+        metrics_id,
+        created_by,
+        created_at,
+        metrics:post_metrics!post_meetings_metrics_id_fkey(
+          impressions, reach, likes, comments, shares, saves, clicks, spend
+        )
+      `
+    )
+    .eq("post_id", postId)
+    .order("meeting_date", { ascending: false })
+    .returns<MeetingRow[]>();
+
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    post_id: row.post_id,
+    meeting_type: row.meeting_type,
+    meeting_date: row.meeting_date,
+    metrics_id: row.metrics_id,
+    created_by: row.created_by,
+    created_at: row.created_at,
+    metrics: row.metrics
+      ? {
+          impressions: Number(row.metrics.impressions ?? 0),
+          reach: Number(row.metrics.reach ?? 0),
+          likes: Number(row.metrics.likes ?? 0),
+          comments: Number(row.metrics.comments ?? 0),
+          shares: Number(row.metrics.shares ?? 0),
+          saves: Number(row.metrics.saves ?? 0),
+          clicks: Number(row.metrics.clicks ?? 0),
+          spend: Number(row.metrics.spend ?? 0),
+        }
+      : null,
+  }));
+}
+
+export async function deleteMeeting(
+  supabase: SupabaseClient,
+  meetingId: string
+): Promise<void> {
+  const { data: meeting, error: fetchError } = await supabase
+    .from("post_meetings")
+    .select("id, metrics_id")
+    .eq("id", meetingId)
+    .maybeSingle<{ id: string; metrics_id: string | null }>();
+
+  if (fetchError) throw fetchError;
+  if (!meeting) return;
+
+  const { error: delMeetingError } = await supabase
+    .from("post_meetings")
+    .delete()
+    .eq("id", meetingId);
+  if (delMeetingError) throw delMeetingError;
+
+  if (meeting.metrics_id) {
+    const { error: delMetricError } = await supabase
+      .from("post_metrics")
+      .delete()
+      .eq("id", meeting.metrics_id);
+    if (delMetricError) throw delMetricError;
+  }
 }
 
 export async function deletePost(

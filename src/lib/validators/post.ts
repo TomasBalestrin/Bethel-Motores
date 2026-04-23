@@ -43,3 +43,13 @@ export const postPatchSchema = z.object({
   is_active: z.boolean().optional(),
 });
 export type PostPatchInput = z.infer<typeof postPatchSchema>;
+
+export const meetingCreateSchema = z.object({
+  meeting_type: z.enum(["terca", "sexta"]),
+  meeting_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use AAAA-MM-DD)"),
+  pause_post: z.boolean(),
+  metrics: postMetricsSchema,
+});
+export type MeetingCreateInput = z.infer<typeof meetingCreateSchema>;
