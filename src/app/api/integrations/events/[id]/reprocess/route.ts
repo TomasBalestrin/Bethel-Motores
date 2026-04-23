@@ -132,6 +132,10 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error("[POST /api/integrations/events/[id]/reprocess]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
