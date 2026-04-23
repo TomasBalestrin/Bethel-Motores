@@ -28,6 +28,30 @@ export interface PostMetricsSnapshot {
   captured_by: string | null;
 }
 
+export type MeetingType = "terca" | "sexta";
+
+export interface PostMeetingMetrics {
+  impressions: number;
+  reach: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  clicks: number;
+  spend: number;
+}
+
+export interface PostMeeting {
+  id: string;
+  post_id: string;
+  meeting_type: MeetingType;
+  meeting_date: string;
+  metrics_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  metrics: PostMeetingMetrics | null;
+}
+
 export type PostAnalysisKind = "file" | "link" | "text";
 
 export interface PostAnalysis {

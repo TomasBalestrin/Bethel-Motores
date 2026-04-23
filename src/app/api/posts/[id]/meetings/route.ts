@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
-import { postPatchSchema } from "@/lib/validators/post";
-import { deletePost, updatePost } from "@/services/posts.service";
+import { meetingCreateSchema } from "@/lib/validators/post";
+import { createMeeting, listMeetings } from "@/services/posts.service";
 
 interface RouteParams {
   params: { id: string };
@@ -15,7 +15,33 @@ function isUuid(value: string): boolean {
   );
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    if (!isUuid(params.id)) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    const data = await listMeetings(supabase, params.id);
+    return NextResponse.json({ data });
+  } catch (error) {
+    console.error("[GET /api/posts/[id]/meetings]", error);
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     if (!isUuid(params.id)) {
       return NextResponse.json({ error: "ID inválido" }, { status: 400 });
@@ -41,7 +67,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (!body) {
       return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
     }
-    const parsed = postPatchSchema.safeParse(body);
+    const parsed = meetingCreateSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.format() },
@@ -49,51 +75,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (Object.keys(parsed.data).length === 0) {
-      return NextResponse.json(
-        { error: "Nenhum campo para atualizar" },
-        { status: 400 }
-      );
-    }
-
-    const data = await updatePost(supabase, params.id, parsed.data);
-    return NextResponse.json({ data });
+    const data = await createMeeting(supabase, params.id, parsed.data, {
+      actorId: user.id,
+    });
+    return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    console.error("[PATCH /api/posts/[id]]", error);
-    const message =
-      error && typeof error === "object" && "message" in error
-        ? String((error as { message: unknown }).message)
-        : "Erro interno";
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
-}
-
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
-  try {
-    if (!isUuid(params.id)) {
-      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
-    }
-
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-
-    const roleCheck = await assertRole(supabase, user.id, [
-      "admin",
-      "gestor_trafego",
-    ]);
-    if (!roleCheck.ok) {
-      return NextResponse.json({ error: roleCheck.error }, { status: 403 });
-    }
-
-    await deletePost(supabase, params.id);
-    return NextResponse.json({ data: { ok: true } });
-  } catch (error) {
-    console.error("[DELETE /api/posts/[id]]", error);
+    console.error("[POST /api/posts/[id]/meetings]", error);
     const message =
       error && typeof error === "object" && "message" in error
         ? String((error as { message: unknown }).message)
