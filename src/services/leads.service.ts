@@ -583,21 +583,14 @@ function pushToIndex<K, V>(map: Map<K, V[]>, key: K, value: V) {
   }
 }
 
-// RPC garante retorno completo (sem max-rows do PostgREST).
-// Fallback paginado em lotes com .order("id") + .range() caso a RPC não esteja disponível.
+// PostgREST aplica max-rows=1000 por resposta (inclusive em RPC).
+// Paginamos em lotes de 1000 com .order("id") para garantir consistência
+// e cobrir todos os leads da mentoria (ex: 8k+ leads em 9 batches).
 async function fetchAllLeadsForMatching(
   supabase: SupabaseClient,
-  mentoriaId: string,
+  _mentoriaId: string,
   funnelIds: string[]
 ): Promise<LeadMatchRow[]> {
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    "get_mentoria_leads_for_matching",
-    { p_mentoria_id: mentoriaId }
-  );
-  if (!rpcError && Array.isArray(rpcData)) {
-    return rpcData as LeadMatchRow[];
-  }
-
   const BATCH = 1000;
   const all: LeadMatchRow[] = [];
   let offset = 0;
