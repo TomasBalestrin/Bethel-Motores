@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
-export async function createClient() {
+// Dedup entre múltiplas chamadas no mesmo render de RSC. createServerClient
+// é leve, mas evita criar N clientes em rotas que fazem muitos fetches.
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -24,4 +27,4 @@ export async function createClient() {
       },
     }
   );
-}
+});

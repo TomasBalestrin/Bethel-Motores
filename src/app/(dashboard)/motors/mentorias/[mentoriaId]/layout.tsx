@@ -6,8 +6,6 @@ import { MentoriaHeader } from "@/components/mentorias/MentoriaHeader";
 import { MentoriaTabs } from "@/components/mentorias/MentoriaTabs";
 import { BreadcrumbLabel } from "@/components/layout/BreadcrumbLabel";
 
-export const dynamic = "force-dynamic";
-
 interface LayoutProps {
   children: React.ReactNode;
   params: { mentoriaId: string };

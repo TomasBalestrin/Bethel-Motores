@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 import { calcDelta, calcPercent, type DeltaResult } from "@/lib/utils/calc";
 import {
   rangeToRangeWithPrevious,
@@ -399,10 +400,10 @@ interface MentoriaDetailRow {
     | null;
 }
 
-export async function getMentoriaById(
+export const getMentoriaById = cache(async (
   supabase: SupabaseClient,
   id: string
-) {
+) => {
   const { data, error } = await supabase
     .from("mentorias")
     .select(MENTORIA_DETAIL_SELECT)
@@ -426,7 +427,7 @@ export async function getMentoriaById(
     specialist: data.specialist ?? null,
     funnels: data.funnels ?? [],
   };
-}
+});
 
 export async function updateMentoria(
   supabase: SupabaseClient,

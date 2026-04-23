@@ -6,8 +6,6 @@ import { ProfileHeader } from "@/components/social-selling/ProfileHeader";
 import { ProfileTabs } from "@/components/social-selling/ProfileTabs";
 import { BreadcrumbLabel } from "@/components/layout/BreadcrumbLabel";
 
-export const dynamic = "force-dynamic";
-
 interface LayoutProps {
   children: React.ReactNode;
   params: { profileSlug: string };
