@@ -37,35 +37,8 @@ export async function createPost(
   input: PostCreateInput,
   options: CreatePostOptions = {}
 ): Promise<{ id: string }> {
-  // Se já existe um post soft-deletado com o mesmo (profile, link),
-  // o unique constraint bloqueia o insert. Revivemos o registro antigo.
-  const { data: existing } = await supabase
-    .from("posts")
-    .select("id, deleted_at")
-    .eq("social_profile_id", profileId)
-    .eq("link", input.link)
-    .maybeSingle<{ id: string; deleted_at: string | null }>();
-
-  if (existing) {
-    if (existing.deleted_at === null) {
-      throw new Error("Já existe um post ativo com esse link");
-    }
-    const { data: revived, error: reviveError } = await supabase
-      .from("posts")
-      .update({
-        code: input.code,
-        deleted_at: null,
-        is_active: true,
-        created_by: options.actorId ?? null,
-      })
-      .eq("id", existing.id)
-      .select("id")
-      .single<{ id: string }>();
-
-    if (reviveError) throw reviveError;
-    return revived;
-  }
-
+  // Unique constraint é parcial (só posts não-deletados), então o insert
+  // funciona mesmo se houver um post soft-deletado com mesmo link.
   const { data, error } = await supabase
     .from("posts")
     .insert({
@@ -77,7 +50,12 @@ export async function createPost(
     .select("id")
     .single<{ id: string }>();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Já existe um post ativo com esse link neste perfil");
+    }
+    throw error;
+  }
   return data;
 }
 
