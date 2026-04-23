@@ -22,12 +22,15 @@ export default async function CriativosPage({ params }: PageProps) {
   if (!profile) notFound();
 
   let posts: ProfilePost[] = [];
+  let loadError: string | null = null;
   try {
     posts = await listPostsByProfile(supabase, profile.id);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    loadError = message;
     console.error(
       "[/motors/social-selling/[slug]/criativos] listPostsByProfile failed:",
-      error instanceof Error ? error.message : error
+      message
     );
   }
 
@@ -44,6 +47,13 @@ export default async function CriativosPage({ params }: PageProps) {
         </div>
         <PostCreateModal profileId={profile.id} />
       </div>
+
+      {loadError ? (
+        <Card className="border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="font-semibold">Erro ao carregar posts</p>
+          <p className="mt-1 break-all font-mono text-xs">{loadError}</p>
+        </Card>
+      ) : null}
 
       <Card className="p-4">
         <PostsTable posts={posts} />
