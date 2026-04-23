@@ -37,6 +37,8 @@ export async function createPost(
   input: PostCreateInput,
   options: CreatePostOptions = {}
 ): Promise<{ id: string }> {
+  // Unique constraint é parcial (só posts não-deletados), então o insert
+  // funciona mesmo se houver um post soft-deletado com mesmo link.
   const { data, error } = await supabase
     .from("posts")
     .insert({
@@ -48,7 +50,12 @@ export async function createPost(
     .select("id")
     .single<{ id: string }>();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Já existe um post ativo com esse link neste perfil");
+    }
+    throw error;
+  }
   return data;
 }
 
