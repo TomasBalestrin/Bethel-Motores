@@ -26,7 +26,21 @@ export default async function CriativosPage({ params }: PageProps) {
   try {
     posts = await listPostsByProfile(supabase, profile.id);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let message: string;
+    if (error instanceof Error) {
+      message = error.message;
+    } else if (error && typeof error === "object") {
+      const obj = error as Record<string, unknown>;
+      const parts = [
+        obj.message ? String(obj.message) : null,
+        obj.code ? `[${String(obj.code)}]` : null,
+        obj.details ? String(obj.details) : null,
+        obj.hint ? `hint: ${String(obj.hint)}` : null,
+      ].filter(Boolean);
+      message = parts.length > 0 ? parts.join(" — ") : JSON.stringify(error);
+    } else {
+      message = String(error);
+    }
     loadError = message;
     console.error(
       "[/motors/social-selling/[slug]/criativos] listPostsByProfile failed:",
