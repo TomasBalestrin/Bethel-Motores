@@ -8,6 +8,7 @@ import {
   type ProfileDashboardStats,
   type ProfilePost,
 } from "@/services/social-profiles.service";
+import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PostsGrid } from "@/components/social-selling/PostsGrid";
 
@@ -17,6 +18,20 @@ interface PageProps {
 
 function zeroStats(): ProfileDashboardStats {
   return { posts_active: 0, impressions: 0, reach: 0, spend: 0 };
+}
+
+function extractMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const obj = error as Record<string, unknown>;
+    const parts = [
+      obj.message ? String(obj.message) : null,
+      obj.code ? `[${String(obj.code)}]` : null,
+      obj.details ? String(obj.details) : null,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(" — ") : JSON.stringify(error);
+  }
+  return String(error);
 }
 
 export default async function SocialProfileDashboardPage({ params }: PageProps) {
@@ -34,8 +49,28 @@ export default async function SocialProfileDashboardPage({ params }: PageProps) 
   const posts: ProfilePost[] =
     postsResult.status === "fulfilled" ? postsResult.value : [];
 
+  const errors = [
+    statsResult.status === "rejected"
+      ? `Stats: ${extractMessage(statsResult.reason)}`
+      : null,
+    postsResult.status === "rejected"
+      ? `Posts: ${extractMessage(postsResult.reason)}`
+      : null,
+  ].filter(Boolean) as string[];
+
   return (
     <div className="space-y-6">
+      {errors.length > 0 ? (
+        <Card className="border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="font-semibold">Erro ao carregar dashboard</p>
+          {errors.map((err, i) => (
+            <p key={i} className="mt-1 break-all font-mono text-xs">
+              {err}
+            </p>
+          ))}
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Posts ativos"
