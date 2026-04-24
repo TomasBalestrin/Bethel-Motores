@@ -44,7 +44,7 @@ import { PostMetricsDrawer } from "./PostMetricsDrawer";
 import { PostAnalysisDrawer } from "./PostAnalysisDrawer";
 import { PostDetailsModal } from "./PostDetailsModal";
 
-type Filter = "all" | "fit" | "test" | "inactive";
+type Filter = "all" | "fit" | "test";
 
 interface PostsTableProps {
   posts: ProfilePost[];
@@ -116,7 +116,6 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
     return decorated.filter((post) => {
       if (filter === "fit" && !post.is_fit) return false;
       if (filter === "test" && !post.is_test) return false;
-      if (filter === "inactive" && post.is_active) return false;
       if (!term) return true;
       return (
         post.code.toLowerCase().includes(term) ||
@@ -212,7 +211,6 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
             <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="fit">Fit</SelectItem>
             <SelectItem value="test">Em teste</SelectItem>
-            <SelectItem value="inactive">Desativados</SelectItem>
           </SelectContent>
         </Select>
       </div>
