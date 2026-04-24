@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +69,15 @@ function costPerFollower(
 ): number | null {
   if (!investment || !followers) return null;
   return investment / followers;
+}
+
+function formatCostSmall(value: number): string {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function PostsTable({ posts, postType }: PostsTableProps) {
@@ -213,41 +221,60 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Data post.</TableHead>
-              <TableHead>Headline</TableHead>
-              <TableHead>Link</TableHead>
+              <TableHead className="w-[120px]">Código</TableHead>
+              <TableHead className="min-w-[180px]">Headline</TableHead>
+              <TableHead className="w-[60px] text-center">Link</TableHead>
               {postType === "impulsionar" ? (
                 <>
-                  <TableHead className="text-right">Investimento</TableHead>
-                  <TableHead className="text-right">Seguidores</TableHead>
-                  <TableHead className="text-right">Custo/seg</TableHead>
-                  <TableHead className="text-right">Hook Rate</TableHead>
-                  <TableHead className="text-right">Hold 50%</TableHead>
-                  <TableHead className="text-right">Hold 75%</TableHead>
-                  <TableHead className="text-right">Duração</TableHead>
+                  <TableHead className="w-[100px] text-right">
+                    Investido
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Seguid.
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Custo/seg
+                  </TableHead>
+                  <TableHead className="w-[70px] text-right">Hook</TableHead>
+                  <TableHead className="w-[70px] text-right">
+                    Hold 50
+                  </TableHead>
+                  <TableHead className="w-[70px] text-right">
+                    Hold 75
+                  </TableHead>
+                  <TableHead className="w-[70px] text-right">
+                    Duração
+                  </TableHead>
                 </>
               ) : (
                 <>
-                  <TableHead className="text-right">Seguidores</TableHead>
-                  <TableHead className="text-right">Alcance</TableHead>
-                  <TableHead className="text-right">Curtidas</TableHead>
-                  <TableHead className="text-right">Comentários</TableHead>
-                  <TableHead className="text-right">Shares</TableHead>
-                  <TableHead className="text-right">Duração</TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Seguid.
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Alcance
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Curtidas
+                  </TableHead>
+                  <TableHead className="w-[80px] text-right">
+                    Coment.
+                  </TableHead>
+                  <TableHead className="w-[70px] text-right">Shares</TableHead>
+                  <TableHead className="w-[70px] text-right">
+                    Duração
+                  </TableHead>
                 </>
               )}
-              <TableHead>Em teste</TableHead>
-              <TableHead>Ativo</TableHead>
-              <TableHead>Fit</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
+              <TableHead className="w-[130px] text-center">Status</TableHead>
+              <TableHead className="w-[100px] text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={postType === "impulsionar" ? 15 : 14}
+                  colSpan={postType === "impulsionar" ? 12 : 11}
                   className="text-center text-sm text-muted-foreground"
                 >
                   Nenhum post corresponde aos filtros.
@@ -260,30 +287,37 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
                   onClick={() => setDetailsTarget(post)}
                   className="cursor-pointer hover:bg-muted/50"
                 >
-                  <TableCell>
-                    <span className="font-medium">{post.code}</span>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {post.posted_at
-                      ? formatDateBR(post.posted_at)
-                      : formatDateBR(post.created_at)}
+                  <TableCell className="align-top">
+                    <div className="flex flex-col">
+                      <span className="font-medium">{post.code}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {post.posted_at
+                          ? formatDateBR(post.posted_at)
+                          : formatDateBR(post.created_at)}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell
-                    className="max-w-[240px] truncate text-xs"
+                    className="align-top"
                     title={post.headline ?? ""}
                   >
-                    {post.headline ?? "—"}
+                    <span className="line-clamp-2 text-xs leading-tight">
+                      {post.headline ?? "—"}
+                    </span>
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell
+                    className="text-center align-top"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {post.link ? (
                       <a
                         href={post.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                        title="Abrir no Instagram"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-muted"
                       >
-                        <ExternalLink className="h-3 w-3" />
-                        Abrir
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
@@ -291,35 +325,35 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
                   </TableCell>
                   {postType === "impulsionar" ? (
                     <>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCurrency(
                           post.latest_metrics?.investment ?? 0
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(
                           post.latest_metrics?.followers_gained ?? 0
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {(() => {
                           const cpf = costPerFollower(
                             post.latest_metrics?.investment,
                             post.latest_metrics?.followers_gained
                           );
-                          return cpf !== null ? formatCurrency(cpf) : "—";
+                          return cpf !== null ? formatCostSmall(cpf) : "—";
                         })()}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatPercent(post.latest_metrics?.hook_rate_3s)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatPercent(post.latest_metrics?.hold_50)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatPercent(post.latest_metrics?.hold_75)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatDuration(
                           post.latest_metrics?.duration_seconds
                         )}
@@ -327,89 +361,121 @@ export function PostsTable({ posts, postType }: PostsTableProps) {
                     </>
                   ) : (
                     <>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(
                           post.latest_metrics?.followers_gained ?? 0
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(post.latest_metrics?.reach ?? 0)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(post.latest_metrics?.likes ?? 0)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(
                           post.latest_metrics?.comments ?? 0
                         )}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatCompactNumber(post.latest_metrics?.shares ?? 0)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell className="text-right align-top tabular-nums">
                         {formatDuration(
                           post.latest_metrics?.duration_seconds
                         )}
                       </TableCell>
                     </>
                   )}
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Switch
-                      checked={Boolean(post.is_test)}
-                      onCheckedChange={(checked) =>
-                        patch(post, { is_test: checked })
-                      }
-                      aria-label="Em teste"
-                    />
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Switch
-                      checked={Boolean(post.is_active)}
-                      onCheckedChange={(checked) =>
-                        patch(post, { is_active: checked })
-                      }
-                      aria-label="Ativo"
-                    />
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={post.is_fit ? "Remover fit" : "Marcar fit"}
-                      onClick={() => patch(post, { is_fit: !post.is_fit })}
-                    >
-                      <Star
-                        className={cn(
-                          "h-4 w-4",
-                          post.is_fit
-                            ? "fill-warning text-warning"
-                            : "text-muted-foreground"
-                        )}
-                      />
-                    </Button>
-                  </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex justify-end gap-1">
+                  <TableCell
+                    className="align-top"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-center gap-1">
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={post.is_test ? "Remover teste" : "Marcar teste"}
+                        title={post.is_test ? "Em teste" : "Marcar como em teste"}
+                        onClick={() => patch(post, { is_test: !post.is_test })}
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold",
+                            post.is_test
+                              ? "bg-warning text-warning-foreground"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          T
+                        </span>
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={post.is_active ? "Pausar" : "Ativar"}
+                        title={post.is_active ? "Ativo" : "Pausado"}
+                        onClick={() =>
+                          patch(post, { is_active: !post.is_active })
+                        }
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold",
+                            post.is_active
+                              ? "bg-success text-success-foreground"
+                              : "bg-muted text-muted-foreground"
+                          )}
+                        >
+                          A
+                        </span>
+                      </Button>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={post.is_fit ? "Remover fit" : "Marcar fit"}
+                        title={post.is_fit ? "Fit" : "Marcar como fit"}
+                        onClick={() => patch(post, { is_fit: !post.is_fit })}
+                      >
+                        <Star
+                          className={cn(
+                            "h-4 w-4",
+                            post.is_fit
+                              ? "fill-warning text-warning"
+                              : "text-muted-foreground"
+                          )}
+                        />
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell
+                    className="align-top"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex justify-end gap-0.5">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Métricas"
+                        title="Atualizar métricas"
                         onClick={() => setMetricsTarget(post)}
                       >
-                        <Gauge className="mr-1 h-3.5 w-3.5" />
-                        Métricas
+                        <Gauge className="h-4 w-4" />
                       </Button>
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Análise"
+                        title="Análise"
                         onClick={() => setAnalysisTarget(post)}
                       >
-                        <FileText className="mr-1 h-3.5 w-3.5" />
-                        Análise
+                        <FileText className="h-4 w-4" />
                       </Button>
                       <Button
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
                         aria-label="Excluir post"
+                        title="Excluir"
                         onClick={() => setDeleteTarget(post)}
                         className="text-destructive hover:text-destructive"
                       >
