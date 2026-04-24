@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { assertRole } from "@/lib/auth/guard";
 import { disparoManualSchema } from "@/lib/validators/mentoria";
 import {
@@ -53,8 +54,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const admin = createAdminClient();
     await updateManualDisparo(
-      supabase,
+      admin,
       params.eventId,
       {
         received_at: new Date(parsed.data.received_at).toISOString(),
@@ -75,7 +77,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[PATCH /api/disparos/[eventId]]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -101,11 +107,16 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: roleCheck.error }, { status: 403 });
     }
 
-    await deleteManualDisparo(supabase, params.eventId, { actorId: user.id });
+    const admin = createAdminClient();
+    await deleteManualDisparo(admin, params.eventId, { actorId: user.id });
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[DELETE /api/disparos/[eventId]]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -58,9 +58,9 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: roleCheck.error }, { status: 403 });
     }
 
-    await reprocessEvent(supabase, params.id);
-
     const admin = createAdminClient();
+    await reprocessEvent(admin, params.id);
+
     const { data: event, error: eventError } = await admin
       .from("integration_events")
       .select(
