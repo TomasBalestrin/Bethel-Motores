@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { formatCompactNumber } from "@/lib/utils/format";
+import { formatCompactNumber, formatCurrency } from "@/lib/utils/format";
 import type { SocialProfileWithStats } from "@/services/social-profiles.service";
 
 interface ProfileSelectionCardProps {
@@ -42,19 +42,23 @@ export function ProfileSelectionCard({ profile }: ProfileSelectionCardProps) {
             </p>
           ) : null}
         </div>
-        <dl className="flex w-full justify-around text-xs">
+        <dl className="flex w-full justify-around gap-3 text-xs">
           <div className="flex flex-col items-center">
             <dt className="text-muted-foreground">Seguidores</dt>
             <dd className="font-heading text-sm font-semibold tabular-nums">
-              {profile.followers != null
-                ? formatCompactNumber(profile.followers)
-                : "—"}
+              {formatCompactNumber(profile.followers)}
             </dd>
           </div>
           <div className="flex flex-col items-center">
             <dt className="text-muted-foreground">Posts ativos</dt>
             <dd className="font-heading text-sm font-semibold tabular-nums">
               {profile.active_posts}
+            </dd>
+          </div>
+          <div className="flex flex-col items-center">
+            <dt className="text-muted-foreground">Investimento</dt>
+            <dd className="font-heading text-sm font-semibold tabular-nums">
+              {formatCurrency(profile.investimento)}
             </dd>
           </div>
         </dl>

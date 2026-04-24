@@ -11,17 +11,22 @@ import { PostCreateModal } from "@/components/social-selling/PostCreateModal";
 import { MeetingBulkImportButton } from "@/components/social-selling/MeetingBulkImportButton";
 import { PostsTable } from "@/components/social-selling/PostsTable";
 import { CriativosSubTabs } from "@/components/social-selling/CriativosSubTabs";
+import { ArchiveToggle } from "@/components/social-selling/ArchiveToggle";
 import type { PostType } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: { profileSlug: string };
-  searchParams: { tipo?: string };
+  searchParams: { tipo?: string; view?: string };
 }
 
 function resolveType(tipo: string | undefined): PostType {
   return tipo === "organico" ? "organico" : "impulsionar";
+}
+
+function resolveView(view: string | undefined): "ativos" | "arquivados" {
+  return view === "arquivados" ? "arquivados" : "ativos";
 }
 
 export default async function CriativosPage({
@@ -29,6 +34,7 @@ export default async function CriativosPage({
   searchParams,
 }: PageProps) {
   const activeType = resolveType(searchParams.tipo);
+  const activeView = resolveView(searchParams.view);
   const supabase = await createClient();
   const profile = await getProfileBySlug(supabase, params.profileSlug);
   if (!profile) notFound();
@@ -60,11 +66,21 @@ export default async function CriativosPage({
     );
   }
 
+  // Contagens para as sub-abas: só posts ativos de cada tipo
   const counts = {
-    impulsionar: allPosts.filter((p) => p.post_type === "impulsionar").length,
-    organico: allPosts.filter((p) => p.post_type === "organico").length,
+    impulsionar: allPosts.filter(
+      (p) => p.post_type === "impulsionar" && p.is_active
+    ).length,
+    organico: allPosts.filter(
+      (p) => p.post_type === "organico" && p.is_active
+    ).length,
   };
-  const filtered = allPosts.filter((p) => p.post_type === activeType);
+
+  // Posts do tipo ativo
+  const postsOfType = allPosts.filter((p) => p.post_type === activeType);
+  const ativos = postsOfType.filter((p) => p.is_active);
+  const arquivados = postsOfType.filter((p) => !p.is_active);
+  const filtered = activeView === "arquivados" ? arquivados : ativos;
 
   return (
     <div className="space-y-4">
@@ -73,8 +89,9 @@ export default async function CriativosPage({
           <h2 className="font-heading text-lg font-semibold">Criativos</h2>
           <p className="text-xs text-muted-foreground">
             {filtered.length === 1
-              ? "1 post cadastrado"
-              : `${filtered.length} posts cadastrados`}
+              ? "1 post"
+              : `${filtered.length} posts`}{" "}
+            · {activeView === "arquivados" ? "Arquivados" : "Ativos"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -84,6 +101,12 @@ export default async function CriativosPage({
       </div>
 
       <CriativosSubTabs active={activeType} counts={counts} />
+
+      <ArchiveToggle
+        view={activeView}
+        ativosCount={ativos.length}
+        arquivadosCount={arquivados.length}
+      />
 
       {loadError ? (
         <Card className="border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive">

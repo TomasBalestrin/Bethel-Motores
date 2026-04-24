@@ -48,55 +48,46 @@ export async function getSocialProfile(
 
 export interface SocialProfileWithStats extends SocialProfileSummary {
   active_posts: number;
-  followers: number | null;
-}
-
-interface ProfileWithCountsRow extends SocialProfileSummary {
-  posts: { count: number }[] | null;
-  latest_metric: { followers: number | null }[] | null;
+  followers: number;
+  investimento: number;
 }
 
 export async function listProfilesWithStats(
   supabase: SupabaseClient
 ): Promise<SocialProfileWithStats[]> {
-  const { data, error } = await supabase
-    .from("social_profiles")
-    .select(
-      `
-        id,
-        slug,
-        name,
-        instagram_handle,
-        avatar_url,
-        is_active,
-        posts(count),
-        latest_metric:social_profile_metrics(followers)
-      `
-    )
-    .eq("is_active", true)
-    .is("deleted_at", null)
-    .order("name", { ascending: true })
-    .returns<ProfileWithCountsRow[]>();
+  const profiles = await listSocialProfiles(supabase);
+  if (profiles.length === 0) return [];
 
-  if (error) {
-    const fallback = await listSocialProfiles(supabase);
-    return fallback.map((profile) => ({
-      ...profile,
-      active_posts: 0,
-      followers: null,
-    }));
-  }
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    instagram_handle: row.instagram_handle,
-    avatar_url: row.avatar_url,
-    is_active: row.is_active,
-    active_posts: row.posts?.[0]?.count ?? 0,
-    followers: row.latest_metric?.[0]?.followers ?? null,
-  }));
+  const withStats = await Promise.all(
+    profiles.map(async (p) => {
+      try {
+        const posts = await listPostsByProfile(supabase, p.id);
+        const active = posts.filter((post) => post.is_active);
+        let investimento = 0;
+        let followers = 0;
+        for (const post of active) {
+          const m = post.latest_metrics;
+          if (!m) continue;
+          investimento += m.investment ?? m.spend ?? 0;
+          followers += m.followers_gained ?? 0;
+        }
+        return {
+          ...p,
+          active_posts: active.length,
+          followers,
+          investimento,
+        };
+      } catch {
+        return {
+          ...p,
+          active_posts: 0,
+          followers: 0,
+          investimento: 0,
+        };
+      }
+    })
+  );
+  return withStats;
 }
 
 export type ProfilePostType = "impulsionar" | "organico";
