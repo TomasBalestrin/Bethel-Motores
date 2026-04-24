@@ -18,7 +18,8 @@ function isUuid(value: string): boolean {
 
 const batchEntrySchema = z.object({
   value: z.number().positive(),
-  platform: trafegoPlatformSchema,
+  platform: trafegoPlatformSchema.optional(),
+  creative_id: z.string().uuid().nullable().optional(),
   captured_at: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (AAAA-MM-DD)"),
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       parsed.data.entries.map((e) => ({
         value: e.value,
         platform: e.platform,
+        creativeId: e.creative_id ?? null,
         capturedAt: `${e.captured_at}T12:00:00.000Z`,
       })),
       { actorId: user.id }

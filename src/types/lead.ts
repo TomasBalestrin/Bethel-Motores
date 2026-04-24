@@ -11,6 +11,7 @@ export interface Lead {
   attended: boolean;
   scheduled: boolean;
   sold: boolean;
+  is_qualified: boolean;
   sale_value: number | null;
   entry_value: number | null;
   created_by: string | null;

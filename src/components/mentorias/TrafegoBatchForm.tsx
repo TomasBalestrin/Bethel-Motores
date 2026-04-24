@@ -15,48 +15,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { TrafegoPlatform } from "@/services/mentorias.service";
+
+interface CreativeOption {
+  id: string;
+  code: string;
+  format: "video" | "static";
+}
 
 interface TrafegoBatchFormProps {
   mentoriaId: string;
+  creatives: CreativeOption[];
 }
-
-const PLATFORM_OPTIONS: { value: TrafegoPlatform; label: string }[] = [
-  { value: "meta_ads", label: "Meta Ads" },
-  { value: "google_ads", label: "Google Ads" },
-  { value: "tiktok", label: "TikTok" },
-  { value: "youtube", label: "YouTube" },
-  { value: "outro", label: "Outro" },
-];
 
 interface Row {
   id: string;
   date: string;
   value: string;
-  platform: TrafegoPlatform;
+  creativeId: string; // "" = sem criativo
 }
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function newRow(date?: string, platform?: TrafegoPlatform): Row {
+function newRow(date?: string, creativeId?: string): Row {
   return {
     id: crypto.randomUUID(),
     date: date ?? todayISO(),
     value: "",
-    platform: platform ?? "meta_ads",
+    creativeId: creativeId ?? "",
   };
 }
 
-export function TrafegoBatchForm({ mentoriaId }: TrafegoBatchFormProps) {
+const NONE_VALUE = "__none__";
+
+export function TrafegoBatchForm({
+  mentoriaId,
+  creatives,
+}: TrafegoBatchFormProps) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [submitting, setSubmitting] = useState(false);
 
   function addRow() {
     const last = rows[rows.length - 1];
-    setRows([...rows, newRow(last?.date, last?.platform)]);
+    setRows([...rows, newRow(last?.date, last?.creativeId)]);
   }
 
   function removeRow(id: string) {
@@ -72,7 +75,11 @@ export function TrafegoBatchForm({ mentoriaId }: TrafegoBatchFormProps) {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const entries: { value: number; platform: TrafegoPlatform; captured_at: string }[] = [];
+    const entries: {
+      value: number;
+      captured_at: string;
+      creative_id?: string | null;
+    }[] = [];
     for (const row of rows) {
       const numeric = Number(row.value.replace(",", "."));
       if (!Number.isFinite(numeric) || numeric <= 0) {
@@ -87,8 +94,8 @@ export function TrafegoBatchForm({ mentoriaId }: TrafegoBatchFormProps) {
       }
       entries.push({
         value: numeric,
-        platform: row.platform,
         captured_at: row.date,
+        creative_id: row.creativeId || null,
       });
     }
 
@@ -131,16 +138,16 @@ export function TrafegoBatchForm({ mentoriaId }: TrafegoBatchFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-2">
-        <div className="hidden grid-cols-[160px_160px_180px_40px] gap-2 text-[11px] font-medium uppercase text-muted-foreground sm:grid">
+        <div className="hidden grid-cols-[160px_160px_220px_40px] gap-2 text-[11px] font-medium uppercase text-muted-foreground sm:grid">
           <Label>Data</Label>
           <Label>Valor (R$)</Label>
-          <Label>Plataforma</Label>
+          <Label>Criativo (opcional)</Label>
           <span />
         </div>
         {rows.map((row) => (
           <div
             key={row.id}
-            className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[160px_160px_180px_40px]"
+            className="grid grid-cols-1 items-center gap-2 sm:grid-cols-[160px_160px_220px_40px]"
           >
             <Input
               type="date"
@@ -160,18 +167,26 @@ export function TrafegoBatchForm({ mentoriaId }: TrafegoBatchFormProps) {
               required
             />
             <Select
-              value={row.platform}
+              value={row.creativeId === "" ? NONE_VALUE : row.creativeId}
               onValueChange={(v) =>
-                updateRow(row.id, { platform: v as TrafegoPlatform })
+                updateRow(row.id, { creativeId: v === NONE_VALUE ? "" : v })
               }
+              disabled={creatives.length === 0}
             >
               <SelectTrigger className="h-9">
-                <SelectValue />
+                <SelectValue
+                  placeholder={
+                    creatives.length === 0
+                      ? "Sem criativos cadastrados"
+                      : "Sem criativo"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {PLATFORM_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                <SelectItem value={NONE_VALUE}>Sem criativo</SelectItem>
+                {creatives.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.code} · {c.format === "video" ? "Vídeo" : "Estático"}
                   </SelectItem>
                 ))}
               </SelectContent>

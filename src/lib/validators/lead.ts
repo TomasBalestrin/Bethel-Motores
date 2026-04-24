@@ -24,6 +24,7 @@ export const leadCreateSchema = z.object({
   attended: z.boolean().optional().default(false),
   scheduled: z.boolean().optional().default(false),
   sold: z.boolean().optional().default(false),
+  is_qualified: z.boolean().optional().default(false),
   sale_value: optionalNumeric,
   entry_value: optionalNumeric,
 });
@@ -40,6 +41,7 @@ export const leadUpdateSchema = z.object({
   attended: z.boolean().optional(),
   scheduled: z.boolean().optional(),
   sold: z.boolean().optional(),
+  is_qualified: z.boolean().optional(),
   sale_value: optionalNumeric,
   entry_value: optionalNumeric,
 });

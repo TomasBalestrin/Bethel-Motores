@@ -162,6 +162,7 @@ export function parseLeadsFromCsv(text: string): ParseResult {
       attended: false,
       scheduled: false,
       sold: false,
+      is_qualified: false,
       sale_value: null,
       entry_value: null,
     });
