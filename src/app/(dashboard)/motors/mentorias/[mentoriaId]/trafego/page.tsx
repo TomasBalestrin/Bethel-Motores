@@ -26,6 +26,7 @@ function zeroKPIs(): TrafegoKPIs {
     cpl: null,
     cac: null,
     burn_rate_pct: null,
+    traffic_funnels_count: 0,
   };
 }
 
@@ -84,7 +85,11 @@ export default async function TrafegoPage({ params }: PageProps) {
             {entries.length === 1
               ? "1 registro"
               : `${entries.length} registros`}
-            {kpis.total_leads > 0 ? ` · ${kpis.total_leads} leads` : ""}
+            {kpis.traffic_funnels_count > 0
+              ? ` · ${kpis.total_leads} leads de ${kpis.traffic_funnels_count} funil${
+                  kpis.traffic_funnels_count === 1 ? "" : "s"
+                } de tráfego`
+              : " · nenhum funil marcado como tráfego"}
             {kpis.vendas > 0 ? ` · ${kpis.vendas} vendas` : ""}
           </span>
         </div>
