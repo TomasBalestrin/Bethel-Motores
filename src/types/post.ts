@@ -39,6 +39,8 @@ export interface PostMeetingMetrics {
   saves: number;
   clicks: number;
   spend: number;
+  investment: number;
+  followers_gained: number;
 }
 
 export interface PostMeeting {
