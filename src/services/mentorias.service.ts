@@ -584,20 +584,26 @@ export interface TrafegoKPIs {
   cpl: number | null;
   cac: number | null;
   burn_rate_pct: number | null;
+  traffic_funnels_count: number;
 }
 
 export async function getTrafegoKPIs(
   supabase: SupabaseClient,
   mentoriaId: string
 ): Promise<TrafegoKPIs> {
-  const [entries, mentoria, leadStatsResult] = await Promise.all([
+  // Só funis marcados como is_traffic_funnel entram no cálculo de CPL/CAC
+  const [entries, mentoria, trafficFunnelsResult] = await Promise.all([
     listTrafegoByMentoria(supabase, mentoriaId).catch(
       () => [] as TrafegoEntry[]
     ),
     getMentoriaById(supabase, mentoriaId),
     supabase
-      .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
-      .maybeSingle<{ total_leads: number | null; vendas: number | null }>(),
+      .from("funnels")
+      .select("id")
+      .eq("mentoria_id", mentoriaId)
+      .eq("is_traffic_funnel", true)
+      .is("deleted_at", null)
+      .returns<{ id: string }[]>(),
   ]);
 
   const totalInvestido = entries.reduce(
@@ -605,8 +611,27 @@ export async function getTrafegoKPIs(
     0
   );
   const trafficBudget = mentoria?.traffic_budget ?? null;
-  const totalLeads = Number(leadStatsResult.data?.total_leads ?? 0);
-  const vendas = Number(leadStatsResult.data?.vendas ?? 0);
+
+  const trafficFunnelIds =
+    trafficFunnelsResult.data?.map((f) => f.id) ?? [];
+  let totalLeads = 0;
+  let vendas = 0;
+
+  if (trafficFunnelIds.length > 0) {
+    const { data: aggRows } = await supabase.rpc(
+      "get_funnel_lead_aggregates",
+      { funnel_ids: trafficFunnelIds }
+    );
+    if (Array.isArray(aggRows)) {
+      for (const row of aggRows as Array<{
+        leads_do_funil: number | null;
+        vendas: number | null;
+      }>) {
+        totalLeads += Number(row.leads_do_funil ?? 0);
+        vendas += Number(row.vendas ?? 0);
+      }
+    }
+  }
 
   const cpl = totalLeads > 0 ? totalInvestido / totalLeads : null;
   const cac = vendas > 0 ? totalInvestido / vendas : null;
@@ -623,6 +648,7 @@ export async function getTrafegoKPIs(
     cpl,
     cac,
     burn_rate_pct: burnRatePct,
+    traffic_funnels_count: trafficFunnelIds.length,
   };
 }
 
