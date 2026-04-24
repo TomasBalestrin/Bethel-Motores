@@ -10,22 +10,33 @@ import { Card } from "@/components/ui/card";
 import { PostCreateModal } from "@/components/social-selling/PostCreateModal";
 import { MeetingBulkImportButton } from "@/components/social-selling/MeetingBulkImportButton";
 import { PostsTable } from "@/components/social-selling/PostsTable";
+import { CriativosSubTabs } from "@/components/social-selling/CriativosSubTabs";
+import type { PostType } from "@/types/post";
 
 export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: { profileSlug: string };
+  searchParams: { tipo?: string };
 }
 
-export default async function CriativosPage({ params }: PageProps) {
+function resolveType(tipo: string | undefined): PostType {
+  return tipo === "organico" ? "organico" : "impulsionar";
+}
+
+export default async function CriativosPage({
+  params,
+  searchParams,
+}: PageProps) {
+  const activeType = resolveType(searchParams.tipo);
   const supabase = await createClient();
   const profile = await getProfileBySlug(supabase, params.profileSlug);
   if (!profile) notFound();
 
-  let posts: ProfilePost[] = [];
+  let allPosts: ProfilePost[] = [];
   let loadError: string | null = null;
   try {
-    posts = await listPostsByProfile(supabase, profile.id);
+    allPosts = await listPostsByProfile(supabase, profile.id);
   } catch (error) {
     let message: string;
     if (error instanceof Error) {
@@ -49,22 +60,30 @@ export default async function CriativosPage({ params }: PageProps) {
     );
   }
 
+  const counts = {
+    impulsionar: allPosts.filter((p) => p.post_type === "impulsionar").length,
+    organico: allPosts.filter((p) => p.post_type === "organico").length,
+  };
+  const filtered = allPosts.filter((p) => p.post_type === activeType);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-heading text-lg font-semibold">Criativos</h2>
           <p className="text-xs text-muted-foreground">
-            {posts.length === 1
+            {filtered.length === 1
               ? "1 post cadastrado"
-              : `${posts.length} posts cadastrados`}
+              : `${filtered.length} posts cadastrados`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <MeetingBulkImportButton profileId={profile.id} />
-          <PostCreateModal profileId={profile.id} />
+          <PostCreateModal profileId={profile.id} postType={activeType} />
         </div>
       </div>
+
+      <CriativosSubTabs active={activeType} counts={counts} />
 
       {loadError ? (
         <Card className="border-destructive/50 bg-destructive/5 p-4 text-sm text-destructive">
@@ -74,7 +93,7 @@ export default async function CriativosPage({ params }: PageProps) {
       ) : null}
 
       <Card className="p-4">
-        <PostsTable posts={posts} />
+        <PostsTable posts={filtered} postType={activeType} />
       </Card>
     </div>
   );

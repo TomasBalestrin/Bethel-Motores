@@ -12,7 +12,7 @@ import type {
 import type { Post, PostMeeting } from "@/types/post";
 
 const POST_COLUMNS =
-  "id, social_profile_id, code, link, is_fit, is_test, is_active, created_by, created_at, updated_at" as const;
+  "id, social_profile_id, code, link, post_type, headline, gancho, assunto, posted_at, is_fit, is_test, is_active, created_by, created_at, updated_at" as const;
 
 export async function listByProfile(
   supabase: SupabaseClient,
@@ -48,6 +48,11 @@ export async function createPost(
       social_profile_id: profileId,
       code: input.code,
       link: input.link,
+      post_type: input.post_type,
+      headline: input.headline ?? null,
+      gancho: input.gancho ?? null,
+      assunto: input.assunto ?? null,
+      posted_at: input.posted_at ?? null,
       created_by: options.actorId ?? null,
     })
     .select("id")
@@ -100,7 +105,11 @@ export async function createMeeting(
       reach: input.metrics.reach,
       impressions: input.metrics.impressions,
       clicks: input.metrics.clicks,
-      captured_at: new Date().toISOString(),
+      hook_rate_3s: input.metrics.hook_rate_3s ?? null,
+      hold_50: input.metrics.hold_50 ?? null,
+      hold_75: input.metrics.hold_75 ?? null,
+      duration_seconds: input.metrics.duration_seconds ?? null,
+      captured_at: `${input.meeting_date}T12:00:00Z`,
       captured_by: options.actorId ?? null,
     })
     .select("id")
@@ -152,6 +161,10 @@ interface MeetingRow {
     spend: number | null;
     investment: number | null;
     followers_gained: number | null;
+    hook_rate_3s: number | null;
+    hold_50: number | null;
+    hold_75: number | null;
+    duration_seconds: number | null;
   } | null;
 }
 
@@ -172,7 +185,8 @@ export async function listMeetings(
         created_at,
         metrics:post_metrics!post_meetings_metrics_id_fkey(
           impressions, reach, likes, comments, shares, saves, clicks, spend,
-          investment, followers_gained
+          investment, followers_gained,
+          hook_rate_3s, hold_50, hold_75, duration_seconds
         )
       `
     )
@@ -201,6 +215,18 @@ export async function listMeetings(
           spend: Number(row.metrics.spend ?? 0),
           investment: Number(row.metrics.investment ?? 0),
           followers_gained: Number(row.metrics.followers_gained ?? 0),
+          hook_rate_3s:
+            row.metrics.hook_rate_3s !== null
+              ? Number(row.metrics.hook_rate_3s)
+              : null,
+          hold_50:
+            row.metrics.hold_50 !== null ? Number(row.metrics.hold_50) : null,
+          hold_75:
+            row.metrics.hold_75 !== null ? Number(row.metrics.hold_75) : null,
+          duration_seconds:
+            row.metrics.duration_seconds !== null
+              ? Number(row.metrics.duration_seconds)
+              : null,
         }
       : null,
   }));
@@ -265,6 +291,10 @@ export async function updateMeeting(
     reach: input.metrics.reach,
     impressions: input.metrics.impressions,
     clicks: input.metrics.clicks,
+    hook_rate_3s: input.metrics.hook_rate_3s ?? null,
+    hold_50: input.metrics.hold_50 ?? null,
+    hold_75: input.metrics.hold_75 ?? null,
+    duration_seconds: input.metrics.duration_seconds ?? null,
   };
 
   let metricsId = existing.metrics_id;
@@ -546,12 +576,28 @@ export async function bulkImportMeetings(
       const derivedCode = first?.shortcode ?? `POST-${first?.meeting_date ?? "unknown"}`;
 
       if (!existing) {
+        // Todas as linhas de um mesmo link vêm com post_type já detectado;
+        // use o da primeira linha. Também aproveita headline/gancho/assunto
+        // da linha mais recente preenchida.
+        const postType = first?.post_type ?? "impulsionar";
+        const headlineSource = [...rowsForLink]
+          .reverse()
+          .find((r) => r.headline);
+        const ganchoSource = [...rowsForLink].reverse().find((r) => r.gancho);
+        const assuntoSource = [...rowsForLink]
+          .reverse()
+          .find((r) => r.assunto);
+
         const { data: created, error: createError } = await supabase
           .from("posts")
           .insert({
             social_profile_id: profileId,
             code: derivedCode,
             link,
+            post_type: postType,
+            headline: headlineSource?.headline ?? null,
+            gancho: ganchoSource?.gancho ?? null,
+            assunto: assuntoSource?.assunto ?? null,
             posted_at: earliestPostedAt,
             created_by: options.actorId ?? null,
           })
@@ -562,11 +608,23 @@ export async function bulkImportMeetings(
         result.posts_created += 1;
       } else {
         postId = existing.id;
+        const patch: Record<string, unknown> = {};
         if (earliestPostedAt && !existing.posted_at) {
-          await supabase
-            .from("posts")
-            .update({ posted_at: earliestPostedAt })
-            .eq("id", postId);
+          patch.posted_at = earliestPostedAt;
+        }
+        const headlineSource = [...rowsForLink]
+          .reverse()
+          .find((r) => r.headline);
+        const ganchoSource = [...rowsForLink].reverse().find((r) => r.gancho);
+        const assuntoSource = [...rowsForLink]
+          .reverse()
+          .find((r) => r.assunto);
+        if (headlineSource?.headline) patch.headline = headlineSource.headline;
+        if (ganchoSource?.gancho) patch.gancho = ganchoSource.gancho;
+        if (assuntoSource?.assunto) patch.assunto = assuntoSource.assunto;
+
+        if (Object.keys(patch).length > 0) {
+          await supabase.from("posts").update(patch).eq("id", postId);
           result.posts_updated += 1;
         }
       }
@@ -587,11 +645,11 @@ export async function bulkImportMeetings(
               investment: spend,
               spend,
               followers_gained: row.followers_gained ?? 0,
-              likes: 0,
-              comments: 0,
-              shares: 0,
+              likes: row.likes ?? 0,
+              comments: row.comments ?? 0,
+              shares: row.shares ?? 0,
               saves: 0,
-              reach: 0,
+              reach: row.reach ?? 0,
               impressions: 0,
               clicks: 0,
               hook_rate_3s: row.hook_rate_3s,
@@ -615,9 +673,6 @@ export async function bulkImportMeetings(
             meeting_type: row.meeting_type,
             meeting_date: row.meeting_date,
             metrics_id: metricsId,
-            gancho: row.gancho,
-            headline: row.headline,
-            assunto: row.assunto,
             created_by: options.actorId ?? null,
           });
         if (meetingError) throw meetingError;

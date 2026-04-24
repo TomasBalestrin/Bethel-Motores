@@ -1,8 +1,15 @@
+export type PostType = "impulsionar" | "organico";
+
 export interface Post {
   id: string;
   social_profile_id: string;
   code: string;
   link: string | null;
+  post_type: PostType;
+  headline: string | null;
+  gancho: string | null;
+  assunto: string | null;
+  posted_at: string | null;
   is_fit: boolean;
   is_test: boolean;
   is_active: boolean;
@@ -41,6 +48,10 @@ export interface PostMeetingMetrics {
   spend: number;
   investment: number;
   followers_gained: number;
+  hook_rate_3s: number | null;
+  hold_50: number | null;
+  hold_75: number | null;
+  duration_seconds: number | null;
 }
 
 export interface PostMeeting {

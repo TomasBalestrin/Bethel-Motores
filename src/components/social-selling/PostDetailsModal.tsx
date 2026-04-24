@@ -139,6 +139,15 @@ export function PostDetailsModal({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span className="font-mono">{post.code}</span>
+              <span
+                className={
+                  post.post_type === "impulsionar"
+                    ? "rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary"
+                    : "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-600"
+                }
+              >
+                {post.post_type === "impulsionar" ? "Impulsionar" : "Orgânico"}
+              </span>
               {post.link ? (
                 <a
                   href={post.link}
@@ -152,7 +161,11 @@ export function PostDetailsModal({
               ) : null}
             </DialogTitle>
             <DialogDescription>
-              Gerencie as reuniões e decisões sobre este post.
+              {post.headline ? (
+                <span className="text-foreground">{post.headline}</span>
+              ) : (
+                "Gerencie as reuniões e decisões sobre este post."
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -199,6 +212,7 @@ export function PostDetailsModal({
       {createTarget ? (
         <MeetingCreateModal
           postId={post.id}
+          postType={post.post_type}
           meetingType={createTarget}
           open={createTarget !== null}
           onOpenChange={(next) => {
@@ -215,6 +229,7 @@ export function PostDetailsModal({
       {editTarget ? (
         <MeetingCreateModal
           postId={post.id}
+          postType={post.post_type}
           meetingType={editTarget.meeting_type}
           mode="edit"
           editing={editTarget}

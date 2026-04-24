@@ -113,11 +113,14 @@ export function inferMeetingType(
   return null;
 }
 
+export type ImportedPostType = "impulsionar" | "organico";
+
 export interface MeetingImportRow {
   link: string;
   shortcode: string | null;
   meeting_date: string; // ISO YYYY-MM-DD
   meeting_type: "terca" | "sexta";
+  post_type: ImportedPostType;
   posted_at: string | null;
   investment: number | null;
   followers_gained: number | null;
@@ -125,6 +128,10 @@ export interface MeetingImportRow {
   hold_50: number | null;
   hold_75: number | null;
   duration_seconds: number | null;
+  reach: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
   gancho: string | null;
   headline: string | null;
   assunto: string | null;
@@ -149,6 +156,10 @@ type FieldKey =
   | "hold_50"
   | "hold_75"
   | "duration_seconds"
+  | "reach"
+  | "likes"
+  | "comments"
+  | "shares"
   | "gancho"
   | "headline"
   | "assunto"
@@ -167,6 +178,13 @@ const HEADER_MAP: Array<{ tokens: string[]; key: FieldKey }> = [
   { tokens: ["hold 50"], key: "hold_50" },
   { tokens: ["hold 75"], key: "hold_75" },
   { tokens: ["duracao"], key: "duration_seconds" },
+  { tokens: ["alcance", "reach"], key: "reach" },
+  { tokens: ["curtidas", "likes"], key: "likes" },
+  { tokens: ["comentarios", "comments"], key: "comments" },
+  {
+    tokens: ["compartilhamentos", "compartilhamento", "shares"],
+    key: "shares",
+  },
   { tokens: ["gancho"], key: "gancho" },
   { tokens: ["headline"], key: "headline" },
   { tokens: ["assunto"], key: "assunto" },
@@ -255,19 +273,60 @@ export function parseMeetingImportCsv(
       return;
     }
 
+    function parseIntOrNull(raw: string | undefined): number | null {
+      if (!raw) return null;
+      const n = Number(raw.replace(/[^\d-]/g, ""));
+      return Number.isFinite(n) ? n : null;
+    }
+
     const investment = parseMoneyBR(values.investment);
-    const followers = values.followers_gained
-      ? Number(values.followers_gained.replace(/[^\d-]/g, ""))
-      : null;
+    const followers = parseIntOrNull(values.followers_gained);
     const hookRate = parsePercent(values.hook_rate_3s);
     const hold50 = parsePercent(values.hold_50);
     const hold75 = parsePercent(values.hold_75);
     const duration = parseDurationSeconds(values.duration_seconds);
+    const reach = parseIntOrNull(values.reach);
+    const likes = parseIntOrNull(values.likes);
+    const comments = parseIntOrNull(values.comments);
+    const shares = parseIntOrNull(values.shares);
     const gancho = stringOrNull(values.gancho);
     const headline = stringOrNull(values.headline);
     const assunto = stringOrNull(values.assunto);
     const pausePost = parseYesNo(values.pause_post);
     const postedAt = parseDatePT(values.posted_at);
+
+    // Detectar post_type: impulsionar se tem métricas pagas (investimento,
+    // hook rate, hold) / orgânico se tem métricas orgânicas (alcance,
+    // curtidas, comentários, shares). Default: impulsionar.
+    const hasImpulsionarMetrics =
+      investment !== null ||
+      hookRate !== null ||
+      hold50 !== null ||
+      hold75 !== null;
+    const hasOrganicoMetrics =
+      reach !== null ||
+      likes !== null ||
+      comments !== null ||
+      shares !== null;
+
+    let postType: ImportedPostType;
+    if (hasImpulsionarMetrics && !hasOrganicoMetrics) {
+      postType = "impulsionar";
+    } else if (hasOrganicoMetrics && !hasImpulsionarMetrics) {
+      postType = "organico";
+    } else if (hasImpulsionarMetrics && hasOrganicoMetrics) {
+      // Ambíguo — ganha quem tem mais campos preenchidos
+      const impCount = [investment, hookRate, hold50, hold75].filter(
+        (v) => v !== null
+      ).length;
+      const orgCount = [reach, likes, comments, shares].filter(
+        (v) => v !== null
+      ).length;
+      postType = impCount >= orgCount ? "impulsionar" : "organico";
+    } else {
+      // Placeholder sem métricas — fallback default
+      postType = "impulsionar";
+    }
 
     const hasAnyMetric =
       investment !== null ||
@@ -276,6 +335,10 @@ export function parseMeetingImportCsv(
       hold50 !== null ||
       hold75 !== null ||
       duration !== null ||
+      reach !== null ||
+      likes !== null ||
+      comments !== null ||
+      shares !== null ||
       gancho !== null ||
       headline !== null ||
       assunto !== null;
@@ -285,6 +348,7 @@ export function parseMeetingImportCsv(
       shortcode: extractInstagramShortcode(rawLink),
       meeting_date: meetingDate,
       meeting_type: meetingType,
+      post_type: postType,
       posted_at: postedAt,
       investment,
       followers_gained:
@@ -293,6 +357,10 @@ export function parseMeetingImportCsv(
       hold_50: hold50,
       hold_75: hold75,
       duration_seconds: duration,
+      reach,
+      likes,
+      comments,
+      shares,
       gancho,
       headline,
       assunto,

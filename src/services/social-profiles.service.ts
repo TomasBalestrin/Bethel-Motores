@@ -99,11 +99,18 @@ export async function listProfilesWithStats(
   }));
 }
 
+export type ProfilePostType = "impulsionar" | "organico";
+
 export interface ProfilePost {
   id: string;
   social_profile_id: string;
   code: string;
   link: string | null;
+  post_type: ProfilePostType;
+  headline: string | null;
+  gancho: string | null;
+  assunto: string | null;
+  posted_at: string | null;
   is_active: boolean;
   is_fit: boolean;
   is_test: boolean;
@@ -120,16 +127,30 @@ export interface PostMetrics {
   saves: number;
   clicks: number;
   spend: number;
+  investment: number;
+  followers_gained: number;
+  hook_rate_3s: number | null;
+  hold_50: number | null;
+  hold_75: number | null;
+  duration_seconds: number | null;
   captured_at: string;
 }
 
 export type PostMetricsHistoryEntry = PostMetrics;
 
-export interface ProfileDashboardStats {
-  posts_active: number;
-  impressions: number;
-  reach: number;
-  spend: number;
+export interface ProfileDashboardStatsByType {
+  impulsionar: {
+    posts_active: number;
+    investimento: number;
+    seguidores: number;
+    hook_rate_avg: number | null;
+  };
+  organico: {
+    posts_active: number;
+    reach: number;
+    likes: number;
+    comments: number;
+  };
 }
 
 interface PostRow {
@@ -137,6 +158,11 @@ interface PostRow {
   social_profile_id: string;
   code: string;
   link: string | null;
+  post_type: ProfilePostType;
+  headline: string | null;
+  gancho: string | null;
+  assunto: string | null;
+  posted_at: string | null;
   is_active: boolean;
   is_fit: boolean;
   is_test: boolean;
@@ -151,6 +177,12 @@ interface PostRow {
         saves: number | null;
         clicks: number | null;
         spend: number | null;
+        investment: number | null;
+        followers_gained: number | null;
+        hook_rate_3s: number | null;
+        hold_50: number | null;
+        hold_75: number | null;
+        duration_seconds: number | null;
         captured_at: string;
       }[]
     | null;
@@ -172,6 +204,11 @@ function mapPostRow(row: PostRow): ProfilePost {
     social_profile_id: row.social_profile_id,
     code: row.code,
     link: row.link,
+    post_type: row.post_type,
+    headline: row.headline,
+    gancho: row.gancho,
+    assunto: row.assunto,
+    posted_at: row.posted_at,
     is_active: row.is_active,
     is_fit: row.is_fit,
     is_test: row.is_test,
@@ -186,6 +223,16 @@ function mapPostRow(row: PostRow): ProfilePost {
           saves: Number(latest.saves ?? 0),
           clicks: Number(latest.clicks ?? 0),
           spend: Number(latest.spend ?? 0),
+          investment: Number(latest.investment ?? 0),
+          followers_gained: Number(latest.followers_gained ?? 0),
+          hook_rate_3s:
+            latest.hook_rate_3s !== null ? Number(latest.hook_rate_3s) : null,
+          hold_50: latest.hold_50 !== null ? Number(latest.hold_50) : null,
+          hold_75: latest.hold_75 !== null ? Number(latest.hold_75) : null,
+          duration_seconds:
+            latest.duration_seconds !== null
+              ? Number(latest.duration_seconds)
+              : null,
           captured_at: latest.captured_at,
         }
       : null,
@@ -211,9 +258,10 @@ export const getProfileBySlug = cache(
 
 export async function listPostsByProfile(
   supabase: SupabaseClient,
-  profileId: string
+  profileId: string,
+  options: { type?: ProfilePostType } = {}
 ): Promise<ProfilePost[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from("posts")
     .select(
       `
@@ -221,6 +269,11 @@ export async function listPostsByProfile(
         social_profile_id,
         code,
         link,
+        post_type,
+        headline,
+        gancho,
+        assunto,
+        posted_at,
         is_active,
         is_fit,
         is_test,
@@ -234,14 +287,25 @@ export async function listPostsByProfile(
           saves,
           clicks,
           spend,
+          investment,
+          followers_gained,
+          hook_rate_3s,
+          hold_50,
+          hold_75,
+          duration_seconds,
           captured_at
         )
       `
     )
     .eq("social_profile_id", profileId)
     .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .returns<PostRow[]>();
+    .order("created_at", { ascending: false });
+
+  if (options.type) {
+    query = query.eq("post_type", options.type);
+  }
+
+  const { data, error } = await query.returns<PostRow[]>();
 
   if (error) throw error;
   return (data ?? []).map(mapPostRow);
@@ -255,7 +319,7 @@ export async function listPostMetricsHistory(
   const { data, error } = await supabase
     .from("post_metrics")
     .select(
-      "impressions, reach, likes, comments, shares, saves, clicks, spend, captured_at"
+      "impressions, reach, likes, comments, shares, saves, clicks, spend, investment, followers_gained, hook_rate_3s, hold_50, hold_75, duration_seconds, captured_at"
     )
     .eq("post_id", postId)
     .order("captured_at", { ascending: true })
@@ -270,6 +334,12 @@ export async function listPostMetricsHistory(
         saves: number | null;
         clicks: number | null;
         spend: number | null;
+        investment: number | null;
+        followers_gained: number | null;
+        hook_rate_3s: number | null;
+        hold_50: number | null;
+        hold_75: number | null;
+        duration_seconds: number | null;
         captured_at: string;
       }[]
     >();
@@ -284,6 +354,14 @@ export async function listPostMetricsHistory(
     saves: Number(row.saves ?? 0),
     clicks: Number(row.clicks ?? 0),
     spend: Number(row.spend ?? 0),
+    investment: Number(row.investment ?? 0),
+    followers_gained: Number(row.followers_gained ?? 0),
+    hook_rate_3s:
+      row.hook_rate_3s !== null ? Number(row.hook_rate_3s) : null,
+    hold_50: row.hold_50 !== null ? Number(row.hold_50) : null,
+    hold_75: row.hold_75 !== null ? Number(row.hold_75) : null,
+    duration_seconds:
+      row.duration_seconds !== null ? Number(row.duration_seconds) : null,
     captured_at: row.captured_at,
   }));
 }
@@ -291,26 +369,55 @@ export async function listPostMetricsHistory(
 export async function getProfileDashboardStats(
   supabase: SupabaseClient,
   profileId: string
-): Promise<ProfileDashboardStats> {
+): Promise<ProfileDashboardStatsByType> {
   const posts = await listPostsByProfile(supabase, profileId);
 
-  const active = posts.filter((post) => post.is_active);
+  const activeImpulsionar = posts.filter(
+    (p) => p.is_active && p.post_type === "impulsionar"
+  );
+  const activeOrganico = posts.filter(
+    (p) => p.is_active && p.post_type === "organico"
+  );
 
-  let impressions = 0;
+  let investimento = 0;
+  let seguidores = 0;
+  let hookRateSum = 0;
+  let hookRateCount = 0;
+  for (const post of activeImpulsionar) {
+    const m = post.latest_metrics;
+    if (!m) continue;
+    investimento += m.investment ?? m.spend ?? 0;
+    seguidores += m.followers_gained ?? 0;
+    if (m.hook_rate_3s !== null) {
+      hookRateSum += m.hook_rate_3s;
+      hookRateCount += 1;
+    }
+  }
+
   let reach = 0;
-  let spend = 0;
-  for (const post of active) {
-    if (!post.latest_metrics) continue;
-    impressions += post.latest_metrics.impressions;
-    reach += post.latest_metrics.reach;
-    spend += post.latest_metrics.spend;
+  let likes = 0;
+  let comments = 0;
+  for (const post of activeOrganico) {
+    const m = post.latest_metrics;
+    if (!m) continue;
+    reach += m.reach ?? 0;
+    likes += m.likes ?? 0;
+    comments += m.comments ?? 0;
   }
 
   return {
-    posts_active: active.length,
-    impressions,
-    reach,
-    spend,
+    impulsionar: {
+      posts_active: activeImpulsionar.length,
+      investimento,
+      seguidores,
+      hook_rate_avg: hookRateCount > 0 ? hookRateSum / hookRateCount : null,
+    },
+    organico: {
+      posts_active: activeOrganico.length,
+      reach,
+      likes,
+      comments,
+    },
   };
 }
 

@@ -1,8 +1,24 @@
 import { z } from "zod";
 
+export const postTypeSchema = z.enum(["impulsionar", "organico"]);
+export type PostTypeInput = z.infer<typeof postTypeSchema>;
+
+const optionalDateISO = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use AAAA-MM-DD)")
+  .nullable()
+  .optional();
+
+const optionalTextField = z.string().max(2000).nullable().optional();
+
 export const postCreateSchema = z.object({
   code: z.string().trim().min(1).max(64),
   link: z.string().trim().url().max(2048),
+  post_type: postTypeSchema,
+  headline: optionalTextField,
+  gancho: optionalTextField,
+  assunto: optionalTextField,
+  posted_at: optionalDateISO,
 });
 export type PostCreateInput = z.infer<typeof postCreateSchema>;
 
@@ -16,6 +32,12 @@ export const postMetricsSchema = z.object({
   reach: z.number().int().nonnegative(),
   impressions: z.number().int().nonnegative().default(0),
   clicks: z.number().int().nonnegative().default(0),
+  // Campos de impulsionar (0-1 como fração)
+  hook_rate_3s: z.number().min(0).max(1).nullable().optional(),
+  hold_50: z.number().min(0).max(1).nullable().optional(),
+  hold_75: z.number().min(0).max(1).nullable().optional(),
+  // Duração em segundos
+  duration_seconds: z.number().int().nonnegative().nullable().optional(),
 });
 export type PostMetricsInput = z.infer<typeof postMetricsSchema>;
 
@@ -41,6 +63,11 @@ export const postPatchSchema = z.object({
   is_fit: z.boolean().optional(),
   is_test: z.boolean().optional(),
   is_active: z.boolean().optional(),
+  post_type: postTypeSchema.optional(),
+  headline: optionalTextField,
+  gancho: optionalTextField,
+  assunto: optionalTextField,
+  posted_at: optionalDateISO,
 });
 export type PostPatchInput = z.infer<typeof postPatchSchema>;
 
@@ -59,6 +86,7 @@ const meetingImportRowSchema = z.object({
   shortcode: z.string().nullable(),
   meeting_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   meeting_type: z.enum(["terca", "sexta"]),
+  post_type: postTypeSchema,
   posted_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   investment: z.number().nullable(),
   followers_gained: z.number().nullable(),
@@ -66,6 +94,10 @@ const meetingImportRowSchema = z.object({
   hold_50: z.number().nullable(),
   hold_75: z.number().nullable(),
   duration_seconds: z.number().int().nullable(),
+  reach: z.number().nullable(),
+  likes: z.number().nullable(),
+  comments: z.number().nullable(),
+  shares: z.number().nullable(),
   gancho: z.string().max(2000).nullable(),
   headline: z.string().max(2000).nullable(),
   assunto: z.string().max(2000).nullable(),
