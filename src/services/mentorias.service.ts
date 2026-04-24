@@ -804,11 +804,8 @@ interface DisparoRow {
   source: { slug: string | null } | null;
 }
 
-function pickPath(
-  payload: Record<string, unknown> | null,
-  path: string
-): unknown {
-  if (!payload) return undefined;
+function pickPath(payload: unknown, path: string): unknown {
+  if (payload == null) return undefined;
   const parts = path.split(".");
   let current: unknown = payload;
   for (const part of parts) {
@@ -821,30 +818,77 @@ function pickPath(
   return current;
 }
 
-function pickNumber(payload: Record<string, unknown> | null, keys: string[]): number {
-  if (!payload) return 0;
+function deepFindByKey(
+  payload: unknown,
+  keyName: string,
+  match: (v: unknown) => boolean
+): unknown {
+  const needle = keyName.toLowerCase();
+  const queue: unknown[] = [payload];
+  const visited = new WeakSet<object>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    if (visited.has(current as object)) continue;
+    visited.add(current as object);
+    if (Array.isArray(current)) {
+      for (const v of current) queue.push(v);
+      continue;
+    }
+    const obj = current as Record<string, unknown>;
+    for (const [k, v] of Object.entries(obj)) {
+      if (k.toLowerCase() === needle && match(v)) return v;
+    }
+    for (const v of Object.values(obj)) {
+      if (v && typeof v === "object") queue.push(v);
+    }
+  }
+  return undefined;
+}
+
+function coerceNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function coerceString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const named = (value as Record<string, unknown>)["name"];
+    if (typeof named === "string" && named.trim().length > 0) return named;
+  }
+  return null;
+}
+
+function pickNumber(payload: unknown, keys: string[]): number {
+  if (payload == null) return 0;
   for (const key of keys) {
-    const value = pickPath(payload, key);
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string") {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return parsed;
+    const direct = pickPath(payload, key);
+    const asNum = coerceNumber(direct);
+    if (asNum !== null) return asNum;
+    if (!key.includes(".")) {
+      const deep = deepFindByKey(payload, key, (v) => coerceNumber(v) !== null);
+      const asDeep = coerceNumber(deep);
+      if (asDeep !== null) return asDeep;
     }
   }
   return 0;
 }
 
-function pickString(
-  payload: Record<string, unknown> | null,
-  keys: string[]
-): string | null {
-  if (!payload) return null;
+function pickString(payload: unknown, keys: string[]): string | null {
+  if (payload == null) return null;
   for (const key of keys) {
-    const value = pickPath(payload, key);
-    if (typeof value === "string" && value.trim().length > 0) return value;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const named = (value as Record<string, unknown>)["name"];
-      if (typeof named === "string" && named.trim().length > 0) return named;
+    const direct = pickPath(payload, key);
+    const asStr = coerceString(direct);
+    if (asStr !== null) return asStr;
+    if (!key.includes(".")) {
+      const deep = deepFindByKey(payload, key, (v) => coerceString(v) !== null);
+      const asDeep = coerceString(deep);
+      if (asDeep !== null) return asDeep;
     }
   }
   return null;
@@ -863,7 +907,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
     source_event_id: row.source_event_id,
     received_at: row.received_at,
     processed_at: row.processed_at,
-    volume_sent: pickNumber(payload as Record<string, unknown>, [
+    volume_sent: pickNumber(payload, [
       "volume",
       "volume_sent",
       "sent",
@@ -871,14 +915,14 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.sent",
       "stats.enviados",
     ]),
-    volume_delivered: pickNumber(payload as Record<string, unknown>, [
+    volume_delivered: pickNumber(payload, [
       "volume_delivered",
       "delivered",
       "stats.delivered",
       "metrics.delivered",
       "stats.entregues",
     ]),
-    volume_read: pickNumber(payload as Record<string, unknown>, [
+    volume_read: pickNumber(payload, [
       "read",
       "volume_read",
       "reads",
@@ -886,7 +930,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.read",
       "stats.lidos",
     ]),
-    volume_replied: pickNumber(payload as Record<string, unknown>, [
+    volume_replied: pickNumber(payload, [
       "replied",
       "volume_replied",
       "replies",
@@ -895,7 +939,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.replied",
       "stats.respondidos",
     ]),
-    volume_failed: pickNumber(payload as Record<string, unknown>, [
+    volume_failed: pickNumber(payload, [
       "failed",
       "volume_failed",
       "failures",
@@ -904,7 +948,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.failed",
       "stats.falhas",
     ]),
-    cost: pickNumber(payload as Record<string, unknown>, [
+    cost: pickNumber(payload, [
       "cost",
       "amount",
       "value",
@@ -912,27 +956,27 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "total_cost",
       "stats.cost",
     ]),
-    funnel_label: pickString(payload as Record<string, unknown>, [
+    funnel_label: pickString(payload, [
       "funnel",
       "funnel_name",
       "funnel_id",
     ]),
-    campaign_name: pickString(payload as Record<string, unknown>, [
+    campaign_name: pickString(payload, [
       "campaign_name",
       "campaign",
-      "name",
-      "title",
-      "label",
-      "disparo",
       "disparo_name",
+      "disparo",
+      "broadcast_name",
+      "broadcast",
+      "title",
     ]),
-    template_name: pickString(payload as Record<string, unknown>, [
+    template_name: pickString(payload, [
       "template_name",
       "template",
       "template_id",
       "template.name",
     ]),
-    responsible_name: pickString(payload as Record<string, unknown>, [
+    responsible_name: pickString(payload, [
       "responsible_name",
       "responsible",
       "responsavel",

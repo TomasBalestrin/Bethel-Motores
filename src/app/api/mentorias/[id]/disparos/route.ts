@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { assertRole } from "@/lib/auth/guard";
 import { disparoManualSchema } from "@/lib/validators/mentoria";
 import { createManualDisparo } from "@/services/mentorias.service";
@@ -50,8 +51,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const admin = createAdminClient();
     const data = await createManualDisparo(
-      supabase,
+      admin,
       params.id,
       {
         received_at: new Date(parsed.data.received_at).toISOString(),
@@ -72,6 +74,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/mentorias/[id]/disparos]", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String((error as { message: unknown }).message)
+        : "Erro interno";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

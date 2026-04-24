@@ -10,13 +10,23 @@ export interface MentoriaCreative {
   headline: string | null;
   link: string | null;
   is_active: boolean;
+  leads: number;
+  qualified_leads: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  hook_rate_3s: number | null;
+  hold_50: number | null;
+  hold_75: number | null;
+  duration_seconds: number | null;
+  notes: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const CREATIVE_COLUMNS =
-  "id, mentoria_id, code, format, headline, link, is_active, created_by, created_at, updated_at" as const;
+  "id, mentoria_id, code, format, headline, link, is_active, leads, qualified_leads, impressions, reach, clicks, hook_rate_3s, hold_50, hold_75, duration_seconds, notes, created_by, created_at, updated_at" as const;
 
 export async function listCreativesByMentoria(
   supabase: SupabaseClient,
@@ -38,6 +48,16 @@ export interface CreativeCreateInput {
   format: CreativeFormat;
   headline?: string | null;
   link?: string | null;
+  leads?: number;
+  qualified_leads?: number;
+  impressions?: number;
+  reach?: number;
+  clicks?: number;
+  hook_rate_3s?: number | null;
+  hold_50?: number | null;
+  hold_75?: number | null;
+  duration_seconds?: number | null;
+  notes?: string | null;
 }
 
 export async function createCreative(
@@ -54,6 +74,16 @@ export async function createCreative(
       format: input.format,
       headline: input.headline ?? null,
       link: input.link ?? null,
+      leads: input.leads ?? 0,
+      qualified_leads: input.qualified_leads ?? 0,
+      impressions: input.impressions ?? 0,
+      reach: input.reach ?? 0,
+      clicks: input.clicks ?? 0,
+      hook_rate_3s: input.hook_rate_3s ?? null,
+      hold_50: input.hold_50 ?? null,
+      hold_75: input.hold_75 ?? null,
+      duration_seconds: input.duration_seconds ?? null,
+      notes: input.notes ?? null,
       created_by: options.actorId ?? null,
     })
     .select("id")
@@ -73,6 +103,16 @@ export interface CreativeUpdateInput {
   headline?: string | null;
   link?: string | null;
   is_active?: boolean;
+  leads?: number;
+  qualified_leads?: number;
+  impressions?: number;
+  reach?: number;
+  clicks?: number;
+  hook_rate_3s?: number | null;
+  hold_50?: number | null;
+  hold_75?: number | null;
+  duration_seconds?: number | null;
+  notes?: string | null;
 }
 
 export async function updateCreative(
@@ -109,6 +149,10 @@ export async function deleteCreative(
 export interface CreativeWithSpend extends MentoriaCreative {
   spent: number;
   entries_count: number;
+  cpl: number | null;
+  cpql: number | null;
+  ctr: number | null; // porcentagem 0-100
+  cpm: number | null;
 }
 
 export async function listCreativesWithSpend(
@@ -136,10 +180,19 @@ export async function listCreativesWithSpend(
 
   return creatives.map((c) => {
     const agg = byCreative.get(c.id) ?? { spent: 0, count: 0 };
+    const spent = agg.spent;
+    const cpl = c.leads > 0 ? spent / c.leads : null;
+    const cpql = c.qualified_leads > 0 ? spent / c.qualified_leads : null;
+    const ctr = c.impressions > 0 ? (c.clicks / c.impressions) * 100 : null;
+    const cpm = c.impressions > 0 ? (spent / c.impressions) * 1000 : null;
     return {
       ...c,
-      spent: agg.spent,
+      spent,
       entries_count: agg.count,
+      cpl,
+      cpql,
+      ctr,
+      cpm,
     };
   });
 }
