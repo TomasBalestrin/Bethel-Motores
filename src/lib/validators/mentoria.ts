@@ -37,6 +37,15 @@ export const mentoriaMetricsSchema = z.object({
 });
 export type MentoriaMetricsInput = z.infer<typeof mentoriaMetricsSchema>;
 
+export const trafegoPlatformSchema = z.enum([
+  "meta_ads",
+  "google_ads",
+  "tiktok",
+  "youtube",
+  "outro",
+]);
+export type TrafegoPlatform = z.infer<typeof trafegoPlatformSchema>;
+
 export const MENTORIA_SORT_OPTIONS = [
   "recent",
   "oldest",

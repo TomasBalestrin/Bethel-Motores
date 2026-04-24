@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
+import { trafegoPlatformSchema } from "@/lib/validators/mentoria";
 import {
   insertTrafegoEntry,
   listTrafegoByMentoria,
@@ -20,6 +21,7 @@ function isUuid(value: string): boolean {
 
 const trafegoInputSchema = z.object({
   value: z.number().positive("Valor deve ser positivo"),
+  platform: trafegoPlatformSchema,
   captured_at: z.string().datetime().optional(),
   funnel_id: z.string().uuid().nullable().optional(),
 });
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const data = await insertTrafegoEntry(supabase, params.id, {
       value: parsed.data.value,
+      platform: parsed.data.platform,
       capturedAt: parsed.data.captured_at,
       actorId: user.id,
     });

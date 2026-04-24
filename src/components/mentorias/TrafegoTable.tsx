@@ -8,11 +8,27 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateTimeBR } from "@/lib/utils/format";
-import type { TrafegoEntry } from "@/services/mentorias.service";
+import type { TrafegoEntry, TrafegoPlatform } from "@/services/mentorias.service";
 
 interface TrafegoTableProps {
   entries: TrafegoEntry[];
 }
+
+const PLATFORM_LABELS: Record<TrafegoPlatform, string> = {
+  meta_ads: "Meta Ads",
+  google_ads: "Google Ads",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  outro: "Outro",
+};
+
+const PLATFORM_COLORS: Record<TrafegoPlatform, string> = {
+  meta_ads: "border-blue-500/40 bg-blue-500/10 text-blue-600",
+  google_ads: "border-amber-500/40 bg-amber-500/10 text-amber-600",
+  tiktok: "border-foreground/20 bg-foreground/10 text-foreground",
+  youtube: "border-red-500/40 bg-red-500/10 text-red-600",
+  outro: "border-border bg-muted text-muted-foreground",
+};
 
 export function TrafegoTable({ entries }: TrafegoTableProps) {
   if (entries.length === 0) {
@@ -30,7 +46,7 @@ export function TrafegoTable({ entries }: TrafegoTableProps) {
           <TableRow>
             <TableHead>Data</TableHead>
             <TableHead>Valor</TableHead>
-            <TableHead>Origem</TableHead>
+            <TableHead>Plataforma</TableHead>
             <TableHead>Responsável</TableHead>
           </TableRow>
         </TableHeader>
@@ -44,12 +60,18 @@ export function TrafegoTable({ entries }: TrafegoTableProps) {
                 {formatCurrency(entry.investimento_trafego)}
               </TableCell>
               <TableCell>
-                <Badge
-                  variant="outline"
-                  className="rounded-full border-border text-[10px] capitalize text-muted-foreground"
-                >
-                  {entry.source}
-                </Badge>
+                {entry.platform ? (
+                  <Badge
+                    variant="outline"
+                    className={`rounded-full text-[10px] ${
+                      PLATFORM_COLORS[entry.platform]
+                    }`}
+                  >
+                    {PLATFORM_LABELS[entry.platform]}
+                  </Badge>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {entry.responsavel_nome ?? "—"}
