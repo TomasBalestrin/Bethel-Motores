@@ -5,12 +5,11 @@ import {
   type TrafegoEntry,
   type TrafegoKPIs,
 } from "@/services/mentorias.service";
-import { listFunnelsByMentoria } from "@/services/funnels.service";
 import { Card } from "@/components/ui/card";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { TrafegoBudgetCard } from "@/components/mentorias/TrafegoBudgetCard";
+import { TrafegoBudgetBreakdown } from "@/components/mentorias/TrafegoBudgetBreakdown";
 import { TrafegoChart } from "@/components/mentorias/TrafegoChart";
-import { TrafegoInlineForm } from "@/components/mentorias/TrafegoInlineForm";
+import { TrafegoBatchForm } from "@/components/mentorias/TrafegoBatchForm";
 import { TrafegoTable } from "@/components/mentorias/TrafegoTable";
 
 interface PageProps {
@@ -20,30 +19,25 @@ interface PageProps {
 function zeroKPIs(): TrafegoKPIs {
   return {
     total_investido: 0,
-    traffic_budget: null,
+    total_budget: 0,
     total_leads: 0,
     vendas: 0,
     cpl: null,
     cac: null,
     burn_rate_pct: null,
     traffic_funnels_count: 0,
+    platforms: [],
   };
 }
 
 export default async function TrafegoPage({ params }: PageProps) {
   const supabase = await createClient();
-  const [entries, funnels, kpis] = await Promise.all([
+  const [entries, kpis] = await Promise.all([
     listTrafegoByMentoria(supabase, params.mentoriaId).catch(
       () => [] as TrafegoEntry[]
     ),
-    listFunnelsByMentoria(supabase, params.mentoriaId).catch(() => []),
     getTrafegoKPIs(supabase, params.mentoriaId).catch(() => zeroKPIs()),
   ]);
-
-  const funnelOptions = funnels.map((funnel) => ({
-    id: funnel.id,
-    name: funnel.name,
-  }));
 
   return (
     <div className="space-y-6">
@@ -53,9 +47,11 @@ export default async function TrafegoPage({ params }: PageProps) {
           value={kpis.total_investido}
           format="currency"
         />
-        <TrafegoBudgetCard
-          investido={kpis.total_investido}
-          budget={kpis.traffic_budget}
+        <TrafegoBudgetBreakdown
+          mentoriaId={params.mentoriaId}
+          platforms={kpis.platforms}
+          totalInvestido={kpis.total_investido}
+          totalBudget={kpis.total_budget}
         />
         <MetricCard
           label="CPL (custo por lead)"
@@ -69,11 +65,16 @@ export default async function TrafegoPage({ params }: PageProps) {
         />
       </div>
 
-      <Card className="p-5">
-        <TrafegoInlineForm
-          mentoriaId={params.mentoriaId}
-          funnels={funnelOptions}
-        />
+      <Card className="space-y-3 p-5">
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="font-heading text-base font-semibold">
+            Lançamento em lote
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            Adicione quantas linhas precisar e salve tudo de uma vez
+          </span>
+        </div>
+        <TrafegoBatchForm mentoriaId={params.mentoriaId} />
       </Card>
 
       <Card className="space-y-3 p-5">
