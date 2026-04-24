@@ -33,14 +33,15 @@ interface LeadsTableProps {
 
 const ROW_HEIGHT = 48;
 
-// Grid: nome | telefone | instagram | faturamento | nicho | 5 toggles | valor-venda | valor-entrada | ações
+// Grid: nome | telefone | instagram | faturamento | nicho | 6 toggles (qualif/grupo/presença/comp/agend/venda) | valor-venda | valor-entrada | ações
 const BASE_GRID_COLS =
-  "220px 140px 140px 110px 120px 82px 92px 110px 90px 72px 120px 120px 68px";
-const BASE_GRID_WIDTH = 1560;
+  "220px 140px 140px 110px 120px 82px 82px 92px 110px 90px 72px 120px 120px 68px";
+const BASE_GRID_WIDTH = 1640;
 const CHECKBOX_COL = "28px";
 const CHECKBOX_WIDTH = 28;
 
 type ToggleKey =
+  | "is_qualified"
   | "joined_group"
   | "confirmed_presence"
   | "attended"
@@ -48,6 +49,7 @@ type ToggleKey =
   | "sold";
 
 const TOGGLES: { key: ToggleKey; label: string; title: string }[] = [
+  { key: "is_qualified", label: "Qualif.", title: "Lead qualificado" },
   { key: "joined_group", label: "Grupo", title: "Entrou no grupo" },
   { key: "confirmed_presence", label: "Presença", title: "Confirmou presença" },
   { key: "attended", label: "Compareceu", title: "Compareceu" },
@@ -394,6 +396,7 @@ export function LeadsTable({
           <span>Instagram</span>
           <span className="text-right">Faturamento</span>
           <span>Nicho</span>
+          <span className="text-center">Qualif.</span>
           <span className="text-center">Grupo</span>
           <span className="text-center">Presença</span>
           <span className="text-center">Compareceu</span>

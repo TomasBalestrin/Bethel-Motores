@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
-import { trafegoPlatformSchema } from "@/lib/validators/mentoria";
+import { creativeCreateSchema } from "@/lib/validators/creative";
 import {
-  listTrafficBudgets,
-  upsertTrafficBudgets,
-} from "@/services/mentorias.service";
+  createCreative,
+  listCreativesWithSpend,
+} from "@/services/creatives.service";
 
 interface RouteParams {
   params: { id: string };
@@ -18,15 +17,6 @@ function isUuid(value: string): boolean {
     value
   );
 }
-
-const budgetItemSchema = z.object({
-  platform: trafegoPlatformSchema,
-  amount: z.number().nonnegative(),
-});
-
-const budgetsSchema = z.object({
-  budgets: z.array(budgetItemSchema).max(5),
-});
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -40,10 +30,10 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     if (!user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
-    const data = await listTrafficBudgets(supabase, params.id);
+    const data = await listCreativesWithSpend(supabase, params.id);
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("[GET /api/mentorias/[id]/trafego/budgets]", error);
+    console.error("[GET /api/mentorias/[id]/creatives]", error);
     const message =
       error && typeof error === "object" && "message" in error
         ? String((error as { message: unknown }).message)
@@ -52,7 +42,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     if (!isUuid(params.id)) {
       return NextResponse.json({ error: "ID inválido" }, { status: 400 });
@@ -74,7 +64,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json().catch(() => null);
-    const parsed = budgetsSchema.safeParse(body);
+    const parsed = creativeCreateSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.format() },
@@ -82,10 +72,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await upsertTrafficBudgets(supabase, params.id, parsed.data.budgets);
-    return NextResponse.json({ data: { ok: true } });
+    const data = await createCreative(supabase, params.id, parsed.data, {
+      actorId: user.id,
+    });
+    return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    console.error("[PUT /api/mentorias/[id]/trafego/budgets]", error);
+    console.error("[POST /api/mentorias/[id]/creatives]", error);
     const message =
       error && typeof error === "object" && "message" in error
         ? String((error as { message: unknown }).message)

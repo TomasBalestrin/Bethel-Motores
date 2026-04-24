@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,74 +12,27 @@ import {
 import { useMemo } from "react";
 
 import { formatCurrency, formatDateBR } from "@/lib/utils/format";
-import type {
-  TrafegoEntry,
-  TrafegoPlatform,
-} from "@/services/mentorias.service";
+import type { TrafegoEntry } from "@/services/mentorias.service";
 
 interface TrafegoChartProps {
   entries: TrafegoEntry[];
 }
 
-const PLATFORM_ORDER: TrafegoPlatform[] = [
-  "meta_ads",
-  "google_ads",
-  "tiktok",
-  "youtube",
-  "outro",
-];
+type ChartRow = { day: string; value: number };
 
-const PLATFORM_LABELS: Record<TrafegoPlatform, string> = {
-  meta_ads: "Meta Ads",
-  google_ads: "Google Ads",
-  tiktok: "TikTok",
-  youtube: "YouTube",
-  outro: "Outro",
-};
-
-const PLATFORM_FILL: Record<TrafegoPlatform, string> = {
-  meta_ads: "#1877F2",
-  google_ads: "#F59E0B",
-  tiktok: "#111827",
-  youtube: "#EF4444",
-  outro: "#94A3B8",
-};
-
-type ChartRow = { day: string } & Record<TrafegoPlatform, number>;
-
-function aggregateByDayAndPlatform(entries: TrafegoEntry[]): ChartRow[] {
-  const byDay = new Map<string, ChartRow>();
+function aggregateByDay(entries: TrafegoEntry[]): ChartRow[] {
+  const byDay = new Map<string, number>();
   for (const entry of entries) {
     const day = entry.captured_at.slice(0, 10);
-    if (!byDay.has(day)) {
-      byDay.set(day, {
-        day,
-        meta_ads: 0,
-        google_ads: 0,
-        tiktok: 0,
-        youtube: 0,
-        outro: 0,
-      });
-    }
-    const platform: TrafegoPlatform = entry.platform ?? "outro";
-    const row = byDay.get(day)!;
-    row[platform] += entry.investimento_trafego;
+    byDay.set(day, (byDay.get(day) ?? 0) + entry.investimento_trafego);
   }
-  return Array.from(byDay.values()).sort((a, b) => a.day.localeCompare(b.day));
+  return Array.from(byDay.entries())
+    .map(([day, value]) => ({ day, value }))
+    .sort((a, b) => a.day.localeCompare(b.day));
 }
 
 export function TrafegoChart({ entries }: TrafegoChartProps) {
-  const data = useMemo(() => aggregateByDayAndPlatform(entries), [entries]);
-
-  const activePlatforms = useMemo(() => {
-    const used = new Set<TrafegoPlatform>();
-    for (const row of data) {
-      for (const p of PLATFORM_ORDER) {
-        if (row[p] > 0) used.add(p);
-      }
-    }
-    return PLATFORM_ORDER.filter((p) => used.has(p));
-  }, [data]);
+  const data = useMemo(() => aggregateByDay(entries), [entries]);
 
   if (data.length === 0) {
     return (
@@ -119,9 +71,9 @@ export function TrafegoChart({ entries }: TrafegoChartProps) {
             stroke="hsl(var(--muted-foreground))"
           />
           <Tooltip
-            formatter={(value, name) => [
+            formatter={(value) => [
               formatCurrency(Number(value ?? 0)),
-              PLATFORM_LABELS[name as TrafegoPlatform] ?? String(name),
+              "Investimento",
             ]}
             labelFormatter={(label) => formatDateBR(String(label))}
             contentStyle={{
@@ -131,21 +83,7 @@ export function TrafegoChart({ entries }: TrafegoChartProps) {
               fontSize: 12,
             }}
           />
-          <Legend
-            wrapperStyle={{ fontSize: 11 }}
-            formatter={(value: string) =>
-              PLATFORM_LABELS[value as TrafegoPlatform] ?? value
-            }
-          />
-          {activePlatforms.map((platform) => (
-            <Bar
-              key={platform}
-              dataKey={platform}
-              stackId="platform"
-              fill={PLATFORM_FILL[platform]}
-              radius={0}
-            />
-          ))}
+          <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

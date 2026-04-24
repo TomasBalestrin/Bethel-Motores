@@ -15,7 +15,7 @@ import {
 } from "@/lib/utils/matching";
 
 const LEAD_COLUMNS =
-  "id, funnel_id, name, phone, instagram_handle, revenue, niche, joined_group, confirmed_presence, attended, scheduled, sold, sale_value, entry_value, created_by, created_at, updated_at" as const;
+  "id, funnel_id, name, phone, instagram_handle, revenue, niche, joined_group, confirmed_presence, attended, scheduled, sold, is_qualified, sale_value, entry_value, created_by, created_at, updated_at" as const;
 
 function toRow(input: LeadCreateInput | LeadUpdateInput) {
   return {
@@ -29,6 +29,7 @@ function toRow(input: LeadCreateInput | LeadUpdateInput) {
     attended: input.attended ?? false,
     scheduled: input.scheduled ?? false,
     sold: input.sold ?? false,
+    is_qualified: input.is_qualified ?? false,
     sale_value: input.sold ? input.sale_value ?? null : null,
     entry_value: input.sold ? input.entry_value ?? null : null,
   };

@@ -486,6 +486,7 @@ export interface TrafegoEntry {
   investimento_api: number;
   source: "manual" | "webhook" | "api";
   platform: TrafegoPlatform | null;
+  creative_id: string | null;
   captured_by: string | null;
   responsavel_nome: string | null;
   notes: string | null;
@@ -498,6 +499,7 @@ interface TrafegoRow {
   investimento_api: number | null;
   source: "manual" | "webhook" | "api";
   platform: TrafegoPlatform | null;
+  creative_id: string | null;
   captured_by: string | null;
   captured_by_profile: { name: string | null } | null;
 }
@@ -516,6 +518,7 @@ export async function listTrafegoByMentoria(
         investimento_api,
         source,
         platform,
+        creative_id,
         captured_by,
         captured_by_profile:user_profiles!mentoria_metrics_captured_by_fkey(name)
       `
@@ -533,6 +536,7 @@ export async function listTrafegoByMentoria(
     investimento_api: Number(row.investimento_api ?? 0),
     source: row.source,
     platform: row.platform,
+    creative_id: row.creative_id,
     captured_by: row.captured_by,
     responsavel_nome: row.captured_by_profile?.name ?? null,
     notes: null,
@@ -541,7 +545,8 @@ export async function listTrafegoByMentoria(
 
 export interface InsertTrafegoInput {
   value: number;
-  platform: TrafegoPlatform;
+  platform?: TrafegoPlatform;
+  creativeId?: string | null;
   capturedAt?: string;
   actorId?: string | null;
 }
@@ -565,7 +570,8 @@ export async function insertTrafegoEntry(
       valor_vendas: 0,
       valor_entrada: 0,
       source: "manual",
-      platform: input.platform,
+      platform: input.platform ?? "meta_ads",
+      creative_id: input.creativeId ?? null,
       captured_at: input.capturedAt ?? new Date().toISOString(),
       captured_by: input.actorId ?? null,
     })
@@ -578,7 +584,8 @@ export async function insertTrafegoEntry(
 
 export interface BatchTrafegoEntry {
   value: number;
-  platform: TrafegoPlatform;
+  platform?: TrafegoPlatform;
+  creativeId?: string | null;
   capturedAt: string;
 }
 
@@ -601,7 +608,8 @@ export async function insertTrafegoBatch(
     valor_vendas: 0,
     valor_entrada: 0,
     source: "manual" as const,
-    platform: e.platform,
+    platform: e.platform ?? "meta_ads",
+    creative_id: e.creativeId ?? null,
     captured_at: e.capturedAt,
     captured_by: options.actorId ?? null,
   }));
@@ -650,73 +658,53 @@ export async function upsertTrafficBudgets(
   if (error) throw error;
 }
 
-export interface PlatformBreakdown {
-  platform: TrafegoPlatform;
-  spent: number;
-  budget: number;
-}
-
 export interface TrafegoKPIs {
   total_investido: number;
-  total_budget: number;
+  traffic_budget: number | null;
   total_leads: number;
+  qualified_leads: number;
   vendas: number;
   cpl: number | null;
+  cpql: number | null;
   cac: number | null;
   burn_rate_pct: number | null;
   traffic_funnels_count: number;
-  platforms: PlatformBreakdown[];
+  creatives_count: number;
+  creatives_video: number;
+  creatives_static: number;
 }
-
-const ALL_PLATFORMS: TrafegoPlatform[] = [
-  "meta_ads",
-  "google_ads",
-  "tiktok",
-  "youtube",
-  "outro",
-];
 
 export async function getTrafegoKPIs(
   supabase: SupabaseClient,
   mentoriaId: string
 ): Promise<TrafegoKPIs> {
-  const [entries, budgets, trafficFunnelsResult] = await Promise.all([
-    listTrafegoByMentoria(supabase, mentoriaId).catch(
-      () => [] as TrafegoEntry[]
-    ),
-    listTrafficBudgets(supabase, mentoriaId).catch(() => [] as TrafegoBudget[]),
-    supabase
-      .from("funnels")
-      .select("id")
-      .eq("mentoria_id", mentoriaId)
-      .eq("is_traffic_funnel", true)
-      .is("deleted_at", null)
-      .returns<{ id: string }[]>(),
-  ]);
+  const [entries, mentoria, trafficFunnelsResult, creativesResult] =
+    await Promise.all([
+      listTrafegoByMentoria(supabase, mentoriaId).catch(
+        () => [] as TrafegoEntry[]
+      ),
+      getMentoriaById(supabase, mentoriaId),
+      supabase
+        .from("funnels")
+        .select("id")
+        .eq("mentoria_id", mentoriaId)
+        .eq("is_traffic_funnel", true)
+        .is("deleted_at", null)
+        .returns<{ id: string }[]>(),
+      supabase
+        .from("mentoria_creatives")
+        .select("id, format")
+        .eq("mentoria_id", mentoriaId)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .returns<{ id: string; format: "video" | "static" }[]>(),
+    ]);
 
-  // Agrega investimento por plataforma
-  const spentByPlatform = new Map<TrafegoPlatform, number>();
-  for (const entry of entries) {
-    const p: TrafegoPlatform = entry.platform ?? "outro";
-    spentByPlatform.set(
-      p,
-      (spentByPlatform.get(p) ?? 0) + (entry.investimento_trafego ?? 0)
-    );
-  }
-
-  const budgetByPlatform = new Map<TrafegoPlatform, number>();
-  for (const b of budgets) {
-    budgetByPlatform.set(b.platform, b.amount);
-  }
-
-  const platforms: PlatformBreakdown[] = ALL_PLATFORMS.map((p) => ({
-    platform: p,
-    spent: spentByPlatform.get(p) ?? 0,
-    budget: budgetByPlatform.get(p) ?? 0,
-  }));
-
-  const totalInvestido = platforms.reduce((s, p) => s + p.spent, 0);
-  const totalBudget = platforms.reduce((s, p) => s + p.budget, 0);
+  const totalInvestido = entries.reduce(
+    (sum, e) => sum + (e.investimento_trafego ?? 0),
+    0
+  );
+  const trafficBudget = mentoria?.traffic_budget ?? null;
 
   const trafficFunnelIds =
     trafficFunnelsResult.data?.map((f) => f.id) ?? [];
@@ -739,21 +727,44 @@ export async function getTrafegoKPIs(
     }
   }
 
+  // Count qualified leads among the traffic funnels
+  let qualifiedLeads = 0;
+  if (trafficFunnelIds.length > 0) {
+    const { count } = await supabase
+      .from("mentoria_leads")
+      .select("id", { count: "exact", head: true })
+      .in("funnel_id", trafficFunnelIds)
+      .eq("is_qualified", true)
+      .is("deleted_at", null);
+    qualifiedLeads = Number(count ?? 0);
+  }
+
+  const creatives = creativesResult.data ?? [];
+  const creativesVideo = creatives.filter((c) => c.format === "video").length;
+  const creativesStatic = creatives.filter((c) => c.format === "static").length;
+
   const cpl = totalLeads > 0 ? totalInvestido / totalLeads : null;
+  const cpql = qualifiedLeads > 0 ? totalInvestido / qualifiedLeads : null;
   const cac = vendas > 0 ? totalInvestido / vendas : null;
   const burnRatePct =
-    totalBudget > 0 ? (totalInvestido / totalBudget) * 100 : null;
+    trafficBudget && trafficBudget > 0
+      ? (totalInvestido / trafficBudget) * 100
+      : null;
 
   return {
     total_investido: totalInvestido,
-    total_budget: totalBudget,
+    traffic_budget: trafficBudget,
     total_leads: totalLeads,
+    qualified_leads: qualifiedLeads,
     vendas,
     cpl,
+    cpql,
     cac,
     burn_rate_pct: burnRatePct,
     traffic_funnels_count: trafficFunnelIds.length,
-    platforms,
+    creatives_count: creatives.length,
+    creatives_video: creativesVideo,
+    creatives_static: creativesStatic,
   };
 }
 

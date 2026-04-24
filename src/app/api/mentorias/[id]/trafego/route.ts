@@ -21,7 +21,8 @@ function isUuid(value: string): boolean {
 
 const trafegoInputSchema = z.object({
   value: z.number().positive("Valor deve ser positivo"),
-  platform: trafegoPlatformSchema,
+  platform: trafegoPlatformSchema.optional(),
+  creative_id: z.string().uuid().nullable().optional(),
   captured_at: z.string().datetime().optional(),
   funnel_id: z.string().uuid().nullable().optional(),
 });
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const data = await insertTrafegoEntry(supabase, params.id, {
       value: parsed.data.value,
       platform: parsed.data.platform,
+      creativeId: parsed.data.creative_id ?? null,
       capturedAt: parsed.data.captured_at,
       actorId: user.id,
     });
