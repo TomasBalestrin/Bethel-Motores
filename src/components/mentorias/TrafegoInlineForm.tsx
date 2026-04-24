@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { TrafegoPlatform } from "@/services/mentorias.service";
 
 interface FunnelOption {
   id: string;
@@ -26,6 +27,14 @@ interface TrafegoInlineFormProps {
   funnels: FunnelOption[];
 }
 
+const PLATFORM_OPTIONS: { value: TrafegoPlatform; label: string }[] = [
+  { value: "meta_ads", label: "Meta Ads" },
+  { value: "google_ads", label: "Google Ads" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "outro", label: "Outro" },
+];
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -34,6 +43,7 @@ export function TrafegoInlineForm({ mentoriaId, funnels }: TrafegoInlineFormProp
   const router = useRouter();
   const [date, setDate] = useState(todayISO());
   const [value, setValue] = useState("");
+  const [platform, setPlatform] = useState<TrafegoPlatform>("meta_ads");
   const [funnelId, setFunnelId] = useState<string>(funnels[0]?.id ?? "");
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,6 +65,7 @@ export function TrafegoInlineForm({ mentoriaId, funnels }: TrafegoInlineFormProp
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             value: numeric,
+            platform,
             captured_at: capturedAt,
             funnel_id: funnelId || null,
           }),
@@ -111,6 +122,26 @@ export function TrafegoInlineForm({ mentoriaId, funnels }: TrafegoInlineFormProp
         />
       </div>
       <div className="space-y-1">
+        <Label htmlFor="trafego-platform" className="text-xs">
+          Plataforma
+        </Label>
+        <Select
+          value={platform}
+          onValueChange={(next) => setPlatform(next as TrafegoPlatform)}
+        >
+          <SelectTrigger id="trafego-platform" className="h-9 w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PLATFORM_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
         <Label htmlFor="trafego-funnel" className="text-xs">
           Funil destino
         </Label>
@@ -119,7 +150,7 @@ export function TrafegoInlineForm({ mentoriaId, funnels }: TrafegoInlineFormProp
           onValueChange={(next) => setFunnelId(next)}
           disabled={funnels.length === 0}
         >
-          <SelectTrigger id="trafego-funnel" className="h-9 w-[200px]">
+          <SelectTrigger id="trafego-funnel" className="h-9 w-[180px]">
             <SelectValue
               placeholder={
                 funnels.length === 0 ? "Sem funis" : "Selecione um funil"

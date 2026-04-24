@@ -472,12 +472,20 @@ export async function updateMentoria(
   return data;
 }
 
+export type TrafegoPlatform =
+  | "meta_ads"
+  | "google_ads"
+  | "tiktok"
+  | "youtube"
+  | "outro";
+
 export interface TrafegoEntry {
   id: string;
   captured_at: string;
   investimento_trafego: number;
   investimento_api: number;
   source: "manual" | "webhook" | "api";
+  platform: TrafegoPlatform | null;
   captured_by: string | null;
   responsavel_nome: string | null;
   notes: string | null;
@@ -489,6 +497,7 @@ interface TrafegoRow {
   investimento_trafego: number | null;
   investimento_api: number | null;
   source: "manual" | "webhook" | "api";
+  platform: TrafegoPlatform | null;
   captured_by: string | null;
   captured_by_profile: { name: string | null } | null;
 }
@@ -506,6 +515,7 @@ export async function listTrafegoByMentoria(
         investimento_trafego,
         investimento_api,
         source,
+        platform,
         captured_by,
         captured_by_profile:user_profiles!mentoria_metrics_captured_by_fkey(name)
       `
@@ -522,6 +532,7 @@ export async function listTrafegoByMentoria(
     investimento_trafego: Number(row.investimento_trafego ?? 0),
     investimento_api: Number(row.investimento_api ?? 0),
     source: row.source,
+    platform: row.platform,
     captured_by: row.captured_by,
     responsavel_nome: row.captured_by_profile?.name ?? null,
     notes: null,
@@ -530,6 +541,7 @@ export async function listTrafegoByMentoria(
 
 export interface InsertTrafegoInput {
   value: number;
+  platform: TrafegoPlatform;
   capturedAt?: string;
   actorId?: string | null;
 }
@@ -553,6 +565,7 @@ export async function insertTrafegoEntry(
       valor_vendas: 0,
       valor_entrada: 0,
       source: "manual",
+      platform: input.platform,
       captured_at: input.capturedAt ?? new Date().toISOString(),
       captured_by: input.actorId ?? null,
     })
@@ -561,6 +574,56 @@ export async function insertTrafegoEntry(
 
   if (error) throw error;
   return data;
+}
+
+export interface TrafegoKPIs {
+  total_investido: number;
+  traffic_budget: number | null;
+  total_leads: number;
+  vendas: number;
+  cpl: number | null;
+  cac: number | null;
+  burn_rate_pct: number | null;
+}
+
+export async function getTrafegoKPIs(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<TrafegoKPIs> {
+  const [entries, mentoria, leadStatsResult] = await Promise.all([
+    listTrafegoByMentoria(supabase, mentoriaId).catch(
+      () => [] as TrafegoEntry[]
+    ),
+    getMentoriaById(supabase, mentoriaId),
+    supabase
+      .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
+      .maybeSingle<{ total_leads: number | null; vendas: number | null }>(),
+  ]);
+
+  const totalInvestido = entries.reduce(
+    (sum, e) => sum + (e.investimento_trafego ?? 0),
+    0
+  );
+  const trafficBudget = mentoria?.traffic_budget ?? null;
+  const totalLeads = Number(leadStatsResult.data?.total_leads ?? 0);
+  const vendas = Number(leadStatsResult.data?.vendas ?? 0);
+
+  const cpl = totalLeads > 0 ? totalInvestido / totalLeads : null;
+  const cac = vendas > 0 ? totalInvestido / vendas : null;
+  const burnRatePct =
+    trafficBudget && trafficBudget > 0
+      ? (totalInvestido / trafficBudget) * 100
+      : null;
+
+  return {
+    total_investido: totalInvestido,
+    traffic_budget: trafficBudget,
+    total_leads: totalLeads,
+    vendas,
+    cpl,
+    cac,
+    burn_rate_pct: burnRatePct,
+  };
 }
 
 export interface DisparoEvent {

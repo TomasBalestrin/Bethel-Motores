@@ -1,11 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import {
+  getTrafegoKPIs,
   listTrafegoByMentoria,
   type TrafegoEntry,
+  type TrafegoKPIs,
 } from "@/services/mentorias.service";
 import { listFunnelsByMentoria } from "@/services/funnels.service";
 import { Card } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/utils/format";
+import { MetricCard } from "@/components/dashboard/MetricCard";
+import { TrafegoBudgetCard } from "@/components/mentorias/TrafegoBudgetCard";
 import { TrafegoChart } from "@/components/mentorias/TrafegoChart";
 import { TrafegoInlineForm } from "@/components/mentorias/TrafegoInlineForm";
 import { TrafegoTable } from "@/components/mentorias/TrafegoTable";
@@ -14,20 +17,28 @@ interface PageProps {
   params: { mentoriaId: string };
 }
 
-function sumInvestment(entries: TrafegoEntry[]): number {
-  return entries.reduce((acc, entry) => acc + entry.investimento_trafego, 0);
+function zeroKPIs(): TrafegoKPIs {
+  return {
+    total_investido: 0,
+    traffic_budget: null,
+    total_leads: 0,
+    vendas: 0,
+    cpl: null,
+    cac: null,
+    burn_rate_pct: null,
+  };
 }
 
 export default async function TrafegoPage({ params }: PageProps) {
   const supabase = await createClient();
-  const [entries, funnels] = await Promise.all([
+  const [entries, funnels, kpis] = await Promise.all([
     listTrafegoByMentoria(supabase, params.mentoriaId).catch(
       () => [] as TrafegoEntry[]
     ),
     listFunnelsByMentoria(supabase, params.mentoriaId).catch(() => []),
+    getTrafegoKPIs(supabase, params.mentoriaId).catch(() => zeroKPIs()),
   ]);
 
-  const total = sumInvestment(entries);
   const funnelOptions = funnels.map((funnel) => ({
     id: funnel.id,
     name: funnel.name,
@@ -35,30 +46,48 @@ export default async function TrafegoPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 md:grid-cols-[minmax(220px,auto)_1fr]">
-        <Card className="flex flex-col justify-center gap-1 p-5">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Total investido em tráfego
-          </p>
-          <p className="font-heading text-2xl font-semibold tabular-nums">
-            {formatCurrency(total)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {entries.length === 1
-              ? "1 registro"
-              : `${entries.length} registros`}
-          </p>
-        </Card>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
+          label="Investido"
+          value={kpis.total_investido}
+          format="currency"
+        />
+        <TrafegoBudgetCard
+          investido={kpis.total_investido}
+          budget={kpis.traffic_budget}
+        />
+        <MetricCard
+          label="CPL (custo por lead)"
+          value={kpis.cpl ?? 0}
+          format="currency"
+        />
+        <MetricCard
+          label="CAC (custo por venda)"
+          value={kpis.cac ?? 0}
+          format="currency"
+        />
+      </div>
+
+      <Card className="p-5">
         <TrafegoInlineForm
           mentoriaId={params.mentoriaId}
           funnels={funnelOptions}
         />
-      </div>
+      </Card>
 
       <Card className="space-y-3 p-5">
-        <h2 className="font-heading text-base font-semibold">
-          Investimento diário
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-base font-semibold">
+            Investimento diário por plataforma
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            {entries.length === 1
+              ? "1 registro"
+              : `${entries.length} registros`}
+            {kpis.total_leads > 0 ? ` · ${kpis.total_leads} leads` : ""}
+            {kpis.vendas > 0 ? ` · ${kpis.vendas} vendas` : ""}
+          </span>
+        </div>
         <TrafegoChart entries={entries} />
       </Card>
 
