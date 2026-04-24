@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ExternalLink,
   Film,
   Image as ImageIcon,
   Pencil,
@@ -32,13 +31,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/utils/format";
+import { formatCompactNumber, formatCurrency } from "@/lib/utils/format";
 import type { CreativeWithSpend } from "@/services/creatives.service";
 import { CreativeFormModal } from "./CreativeFormModal";
 
 interface CreativesSectionProps {
   mentoriaId: string;
   creatives: CreativeWithSpend[];
+}
+
+function formatPct(value: number | null, digits = 1): string {
+  if (value === null) return "—";
+  return `${value.toFixed(digits)}%`;
+}
+
+function formatFraction(value: number | null, digits = 1): string {
+  if (value === null) return "—";
+  return `${(value * 100).toFixed(digits)}%`;
 }
 
 export function CreativesSection({
@@ -88,7 +97,7 @@ export function CreativesSection({
           <p className="text-xs text-muted-foreground">
             {creatives.length === 0
               ? "Cadastre os criativos usados no tráfego desta mentoria"
-              : `${creatives.length} criativo${creatives.length === 1 ? "" : "s"} cadastrado${creatives.length === 1 ? "" : "s"}`}
+              : `${creatives.length} criativo${creatives.length === 1 ? "" : "s"} cadastrado${creatives.length === 1 ? "" : "s"} · clique na linha pra editar`}
           </p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -106,18 +115,27 @@ export function CreativesSection({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Headline</TableHead>
-                <TableHead>Link</TableHead>
-                <TableHead className="text-right">Investido</TableHead>
-                <TableHead className="text-right">Lançamentos</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="w-[80px]">Código</TableHead>
+                <TableHead className="w-[90px]">Tipo</TableHead>
+                <TableHead className="min-w-[200px]">Headline</TableHead>
+                <TableHead className="w-[100px] text-right">Investido</TableHead>
+                <TableHead className="w-[60px] text-right">Leads</TableHead>
+                <TableHead className="w-[80px] text-right">CPL</TableHead>
+                <TableHead className="w-[70px] text-right">CTR</TableHead>
+                <TableHead className="w-[70px] text-right">Hook</TableHead>
+                <TableHead className="w-[90px] text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {creatives.map((c) => (
-                <TableRow key={c.id} className={cn(!c.is_active && "opacity-60")}>
+                <TableRow
+                  key={c.id}
+                  onClick={() => setEditTarget(c)}
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/50",
+                    !c.is_active && "opacity-60"
+                  )}
+                >
                   <TableCell className="font-medium">{c.code}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[10px]">
@@ -135,33 +153,27 @@ export function CreativesSection({
                     </span>
                   </TableCell>
                   <TableCell
-                    className="max-w-[280px] truncate text-xs"
+                    className="max-w-[260px] truncate text-xs"
                     title={c.headline ?? ""}
                   >
                     {c.headline ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    {c.link ? (
-                      <a
-                        href={c.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        Abrir
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatCurrency(c.spent)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {c.entries_count}
+                    {formatCompactNumber(c.leads)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {c.cpl !== null ? formatCurrency(c.cpl) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatPct(c.ctr)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {c.format === "video" ? formatFraction(c.hook_rate_3s) : "—"}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-0.5">
                       <Button
                         size="icon-sm"
