@@ -576,27 +576,115 @@ export async function insertTrafegoEntry(
   return data;
 }
 
+export interface BatchTrafegoEntry {
+  value: number;
+  platform: TrafegoPlatform;
+  capturedAt: string;
+}
+
+export async function insertTrafegoBatch(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  entries: BatchTrafegoEntry[],
+  options: { actorId?: string | null } = {}
+): Promise<number> {
+  if (entries.length === 0) return 0;
+  const rows = entries.map((e) => ({
+    mentoria_id: mentoriaId,
+    investimento_trafego: e.value,
+    investimento_api: 0,
+    leads_grupo: 0,
+    leads_ao_vivo: 0,
+    agendamentos: 0,
+    calls_realizadas: 0,
+    vendas: 0,
+    valor_vendas: 0,
+    valor_entrada: 0,
+    source: "manual" as const,
+    platform: e.platform,
+    captured_at: e.capturedAt,
+    captured_by: options.actorId ?? null,
+  }));
+  const { error } = await supabase.from("mentoria_metrics").insert(rows);
+  if (error) throw error;
+  return rows.length;
+}
+
+export interface TrafegoBudget {
+  platform: TrafegoPlatform;
+  amount: number;
+}
+
+export async function listTrafficBudgets(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<TrafegoBudget[]> {
+  const { data, error } = await supabase
+    .from("mentoria_traffic_budgets")
+    .select("platform, amount")
+    .eq("mentoria_id", mentoriaId)
+    .returns<{ platform: TrafegoPlatform; amount: number | null }[]>();
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    platform: r.platform,
+    amount: Number(r.amount ?? 0),
+  }));
+}
+
+export async function upsertTrafficBudgets(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  budgets: TrafegoBudget[]
+): Promise<void> {
+  if (budgets.length === 0) return;
+  const now = new Date().toISOString();
+  const rows = budgets.map((b) => ({
+    mentoria_id: mentoriaId,
+    platform: b.platform,
+    amount: b.amount,
+    updated_at: now,
+  }));
+  const { error } = await supabase
+    .from("mentoria_traffic_budgets")
+    .upsert(rows, { onConflict: "mentoria_id,platform" });
+  if (error) throw error;
+}
+
+export interface PlatformBreakdown {
+  platform: TrafegoPlatform;
+  spent: number;
+  budget: number;
+}
+
 export interface TrafegoKPIs {
   total_investido: number;
-  traffic_budget: number | null;
+  total_budget: number;
   total_leads: number;
   vendas: number;
   cpl: number | null;
   cac: number | null;
   burn_rate_pct: number | null;
   traffic_funnels_count: number;
+  platforms: PlatformBreakdown[];
 }
+
+const ALL_PLATFORMS: TrafegoPlatform[] = [
+  "meta_ads",
+  "google_ads",
+  "tiktok",
+  "youtube",
+  "outro",
+];
 
 export async function getTrafegoKPIs(
   supabase: SupabaseClient,
   mentoriaId: string
 ): Promise<TrafegoKPIs> {
-  // Só funis marcados como is_traffic_funnel entram no cálculo de CPL/CAC
-  const [entries, mentoria, trafficFunnelsResult] = await Promise.all([
+  const [entries, budgets, trafficFunnelsResult] = await Promise.all([
     listTrafegoByMentoria(supabase, mentoriaId).catch(
       () => [] as TrafegoEntry[]
     ),
-    getMentoriaById(supabase, mentoriaId),
+    listTrafficBudgets(supabase, mentoriaId).catch(() => [] as TrafegoBudget[]),
     supabase
       .from("funnels")
       .select("id")
@@ -606,11 +694,29 @@ export async function getTrafegoKPIs(
       .returns<{ id: string }[]>(),
   ]);
 
-  const totalInvestido = entries.reduce(
-    (sum, e) => sum + (e.investimento_trafego ?? 0),
-    0
-  );
-  const trafficBudget = mentoria?.traffic_budget ?? null;
+  // Agrega investimento por plataforma
+  const spentByPlatform = new Map<TrafegoPlatform, number>();
+  for (const entry of entries) {
+    const p: TrafegoPlatform = entry.platform ?? "outro";
+    spentByPlatform.set(
+      p,
+      (spentByPlatform.get(p) ?? 0) + (entry.investimento_trafego ?? 0)
+    );
+  }
+
+  const budgetByPlatform = new Map<TrafegoPlatform, number>();
+  for (const b of budgets) {
+    budgetByPlatform.set(b.platform, b.amount);
+  }
+
+  const platforms: PlatformBreakdown[] = ALL_PLATFORMS.map((p) => ({
+    platform: p,
+    spent: spentByPlatform.get(p) ?? 0,
+    budget: budgetByPlatform.get(p) ?? 0,
+  }));
+
+  const totalInvestido = platforms.reduce((s, p) => s + p.spent, 0);
+  const totalBudget = platforms.reduce((s, p) => s + p.budget, 0);
 
   const trafficFunnelIds =
     trafficFunnelsResult.data?.map((f) => f.id) ?? [];
@@ -636,19 +742,18 @@ export async function getTrafegoKPIs(
   const cpl = totalLeads > 0 ? totalInvestido / totalLeads : null;
   const cac = vendas > 0 ? totalInvestido / vendas : null;
   const burnRatePct =
-    trafficBudget && trafficBudget > 0
-      ? (totalInvestido / trafficBudget) * 100
-      : null;
+    totalBudget > 0 ? (totalInvestido / totalBudget) * 100 : null;
 
   return {
     total_investido: totalInvestido,
-    traffic_budget: trafficBudget,
+    total_budget: totalBudget,
     total_leads: totalLeads,
     vendas,
     cpl,
     cac,
     burn_rate_pct: burnRatePct,
     traffic_funnels_count: trafficFunnelIds.length,
+    platforms,
   };
 }
 
