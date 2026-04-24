@@ -76,6 +76,11 @@ export async function POST(request: NextRequest) {
       {
         code: parsed.data.code,
         link: parsed.data.link,
+        post_type: parsed.data.post_type,
+        headline: parsed.data.headline ?? null,
+        gancho: parsed.data.gancho ?? null,
+        assunto: parsed.data.assunto ?? null,
+        posted_at: parsed.data.posted_at ?? null,
       },
       { actorId: user.id }
     );

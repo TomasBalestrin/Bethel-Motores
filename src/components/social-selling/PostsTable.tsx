@@ -39,6 +39,7 @@ import {
   formatDateBR,
 } from "@/lib/utils/format";
 import type { ProfilePost } from "@/services/social-profiles.service";
+import type { PostType } from "@/types/post";
 import { useDebounce } from "@/hooks/useDebounce";
 import { PostMetricsDrawer } from "./PostMetricsDrawer";
 import { PostAnalysisDrawer } from "./PostAnalysisDrawer";
@@ -48,9 +49,30 @@ type Filter = "all" | "fit" | "test" | "inactive";
 
 interface PostsTableProps {
   posts: ProfilePost[];
+  postType: PostType;
 }
 
-export function PostsTable({ posts }: PostsTableProps) {
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function costPerFollower(
+  investment: number | null | undefined,
+  followers: number | null | undefined
+): number | null {
+  if (!investment || !followers) return null;
+  return investment / followers;
+}
+
+export function PostsTable({ posts, postType }: PostsTableProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [optimistic, setOptimistic] = useState<Record<string, Partial<ProfilePost>>>({});
@@ -192,9 +214,29 @@ export function PostsTable({ posts }: PostsTableProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Código</TableHead>
+              <TableHead>Data post.</TableHead>
+              <TableHead>Headline</TableHead>
               <TableHead>Link</TableHead>
-              <TableHead className="text-right">Impressões</TableHead>
-              <TableHead className="text-right">Gasto</TableHead>
+              {postType === "impulsionar" ? (
+                <>
+                  <TableHead className="text-right">Investimento</TableHead>
+                  <TableHead className="text-right">Seguidores</TableHead>
+                  <TableHead className="text-right">Custo/seg</TableHead>
+                  <TableHead className="text-right">Hook Rate</TableHead>
+                  <TableHead className="text-right">Hold 50%</TableHead>
+                  <TableHead className="text-right">Hold 75%</TableHead>
+                  <TableHead className="text-right">Duração</TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead className="text-right">Seguidores</TableHead>
+                  <TableHead className="text-right">Alcance</TableHead>
+                  <TableHead className="text-right">Curtidas</TableHead>
+                  <TableHead className="text-right">Comentários</TableHead>
+                  <TableHead className="text-right">Shares</TableHead>
+                  <TableHead className="text-right">Duração</TableHead>
+                </>
+              )}
               <TableHead>Em teste</TableHead>
               <TableHead>Ativo</TableHead>
               <TableHead>Fit</TableHead>
@@ -205,7 +247,7 @@ export function PostsTable({ posts }: PostsTableProps) {
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={postType === "impulsionar" ? 15 : 14}
                   className="text-center text-sm text-muted-foreground"
                 >
                   Nenhum post corresponde aos filtros.
@@ -219,12 +261,18 @@ export function PostsTable({ posts }: PostsTableProps) {
                   className="cursor-pointer hover:bg-muted/50"
                 >
                   <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{post.code}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {formatDateBR(post.created_at)}
-                      </span>
-                    </div>
+                    <span className="font-medium">{post.code}</span>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {post.posted_at
+                      ? formatDateBR(post.posted_at)
+                      : formatDateBR(post.created_at)}
+                  </TableCell>
+                  <TableCell
+                    className="max-w-[240px] truncate text-xs"
+                    title={post.headline ?? ""}
+                  >
+                    {post.headline ?? "—"}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     {post.link ? (
@@ -241,12 +289,70 @@ export function PostsTable({ posts }: PostsTableProps) {
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCompactNumber(post.latest_metrics?.impressions ?? 0)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCurrency(post.latest_metrics?.spend ?? 0)}
-                  </TableCell>
+                  {postType === "impulsionar" ? (
+                    <>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCurrency(
+                          post.latest_metrics?.investment ?? 0
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(
+                          post.latest_metrics?.followers_gained ?? 0
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {(() => {
+                          const cpf = costPerFollower(
+                            post.latest_metrics?.investment,
+                            post.latest_metrics?.followers_gained
+                          );
+                          return cpf !== null ? formatCurrency(cpf) : "—";
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatPercent(post.latest_metrics?.hook_rate_3s)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatPercent(post.latest_metrics?.hold_50)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatPercent(post.latest_metrics?.hold_75)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatDuration(
+                          post.latest_metrics?.duration_seconds
+                        )}
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(
+                          post.latest_metrics?.followers_gained ?? 0
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(post.latest_metrics?.reach ?? 0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(post.latest_metrics?.likes ?? 0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(
+                          post.latest_metrics?.comments ?? 0
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCompactNumber(post.latest_metrics?.shares ?? 0)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatDuration(
+                          post.latest_metrics?.duration_seconds
+                        )}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Switch
                       checked={Boolean(post.is_test)}

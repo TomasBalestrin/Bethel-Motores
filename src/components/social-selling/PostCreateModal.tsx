@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -23,26 +23,41 @@ import {
   postCreateSchema,
   type PostCreateInput,
 } from "@/lib/validators/post";
+import type { PostType } from "@/types/post";
 
 interface PostCreateModalProps {
   profileId: string;
+  postType: PostType;
 }
 
-export function PostCreateModal({ profileId }: PostCreateModalProps) {
+export function PostCreateModal({ profileId, postType }: PostCreateModalProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const form = useForm<PostCreateInput>({
-    resolver: zodResolver(postCreateSchema),
-    defaultValues: { code: "", link: "" },
+    resolver: zodResolver(postCreateSchema) as Resolver<PostCreateInput>,
+    defaultValues: {
+      code: "",
+      link: "",
+      post_type: postType,
+      headline: "",
+      posted_at: null,
+    },
   });
 
   async function onSubmit(input: PostCreateInput) {
     try {
+      const body = {
+        ...input,
+        post_type: postType,
+        social_profile_id: profileId,
+        headline: input.headline || null,
+        posted_at: input.posted_at || null,
+      };
       const response = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...input, social_profile_id: profileId }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -53,7 +68,13 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
         );
       }
       toast.success("Post cadastrado");
-      form.reset();
+      form.reset({
+        code: "",
+        link: "",
+        post_type: postType,
+        headline: "",
+        posted_at: null,
+      });
       setOpen(false);
       router.refresh();
     } catch (error) {
@@ -64,6 +85,7 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
   }
 
   const isSubmitting = form.formState.isSubmitting;
+  const typeLabel = postType === "impulsionar" ? "Impulsionar" : "Orgânico";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -75,9 +97,9 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Novo post</DialogTitle>
+          <DialogTitle>Novo post · {typeLabel}</DialogTitle>
           <DialogDescription>
-            Informe o código e o link do post.
+            Informe o código, link e opcionalmente a headline e data de postagem.
           </DialogDescription>
         </DialogHeader>
 
@@ -113,6 +135,24 @@ export function PostCreateModal({ profileId }: PostCreateModalProps) {
                 {form.formState.errors.link.message}
               </p>
             ) : null}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="post-headline">Headline (opcional)</Label>
+            <Input
+              id="post-headline"
+              placeholder="Título/gancho principal do post"
+              {...form.register("headline")}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="post-posted-at">Data de postagem (opcional)</Label>
+            <Input
+              id="post-posted-at"
+              type="date"
+              {...form.register("posted_at")}
+            />
           </div>
 
           <DialogFooter>

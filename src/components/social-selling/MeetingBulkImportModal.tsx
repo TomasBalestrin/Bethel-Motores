@@ -168,6 +168,10 @@ export function MeetingBulkImportModal({
 
   const placeholders = rows?.filter((r) => r.is_placeholder).length ?? 0;
   const filled = rows ? rows.length - placeholders : 0;
+  const impulsionarCount =
+    rows?.filter((r) => r.post_type === "impulsionar").length ?? 0;
+  const organicoCount =
+    rows?.filter((r) => r.post_type === "organico").length ?? 0;
 
   return (
     <Dialog
@@ -281,6 +285,10 @@ export function MeetingBulkImportModal({
                     ? ` · ${placeholders} placeholder${placeholders === 1 ? "" : "s"}`
                     : ""}
                 </span>
+                <span className="text-muted-foreground">
+                  Impulsionar: <strong>{impulsionarCount}</strong> · Orgânico:{" "}
+                  <strong>{organicoCount}</strong>
+                </span>
                 {unmapped.length > 0 ? (
                   <span className="text-muted-foreground">
                     Colunas ignoradas: {unmapped.join(", ")}
@@ -305,6 +313,15 @@ export function MeetingBulkImportModal({
                     </span>
                     <span className="w-12 text-primary">
                       {row.meeting_type === "terca" ? "Terça" : "Sexta"}
+                    </span>
+                    <span
+                      className={
+                        row.post_type === "impulsionar"
+                          ? "w-20 rounded-full bg-primary/10 px-1.5 text-center text-primary"
+                          : "w-20 rounded-full bg-emerald-500/10 px-1.5 text-center text-emerald-600"
+                      }
+                    >
+                      {row.post_type === "impulsionar" ? "Imp." : "Org."}
                     </span>
                     <span className="flex-1 truncate font-mono">
                       {row.shortcode ?? row.link}

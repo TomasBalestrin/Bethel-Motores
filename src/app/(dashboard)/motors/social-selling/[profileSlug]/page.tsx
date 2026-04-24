@@ -5,7 +5,7 @@ import {
   getProfileBySlug,
   getProfileDashboardStats,
   listPostsByProfile,
-  type ProfileDashboardStats,
+  type ProfileDashboardStatsByType,
   type ProfilePost,
 } from "@/services/social-profiles.service";
 import { Card } from "@/components/ui/card";
@@ -16,8 +16,21 @@ interface PageProps {
   params: { profileSlug: string };
 }
 
-function zeroStats(): ProfileDashboardStats {
-  return { posts_active: 0, impressions: 0, reach: 0, spend: 0 };
+function zeroStats(): ProfileDashboardStatsByType {
+  return {
+    impulsionar: {
+      posts_active: 0,
+      investimento: 0,
+      seguidores: 0,
+      hook_rate_avg: null,
+    },
+    organico: {
+      posts_active: 0,
+      reach: 0,
+      likes: 0,
+      comments: 0,
+    },
+  };
 }
 
 function extractMessage(error: unknown): string {
@@ -71,24 +84,65 @@ export default async function SocialProfileDashboardPage({ params }: PageProps) 
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Posts ativos"
-          value={stats.posts_active}
-          format="integer"
-        />
-        <MetricCard
-          label="Impressões (último snapshot)"
-          value={stats.impressions}
-          format="integer"
-        />
-        <MetricCard
-          label="Alcance (último snapshot)"
-          value={stats.reach}
-          format="integer"
-        />
-        <MetricCard label="Gasto total" value={stats.spend} format="currency" />
-      </div>
+      <section className="space-y-2">
+        <h2 className="font-heading text-sm font-semibold uppercase text-primary">
+          Impulsionar
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Posts ativos"
+            value={stats.impulsionar.posts_active}
+            format="integer"
+          />
+          <MetricCard
+            label="Investimento total"
+            value={stats.impulsionar.investimento}
+            format="currency"
+          />
+          <MetricCard
+            label="Seguidores ganhos"
+            value={stats.impulsionar.seguidores}
+            format="integer"
+          />
+          <MetricCard
+            label="Hook Rate (média)"
+            value={
+              stats.impulsionar.hook_rate_avg !== null
+                ? stats.impulsionar.hook_rate_avg * 100
+                : 0
+            }
+            format="percent"
+          />
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="font-heading text-sm font-semibold uppercase text-emerald-600">
+          Orgânico
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            label="Posts ativos"
+            value={stats.organico.posts_active}
+            format="integer"
+          />
+          <MetricCard
+            label="Alcance total"
+            value={stats.organico.reach}
+            format="integer"
+          />
+          <MetricCard
+            label="Curtidas"
+            value={stats.organico.likes}
+            format="integer"
+          />
+          <MetricCard
+            label="Comentários"
+            value={stats.organico.comments}
+            format="integer"
+          />
+        </div>
+      </section>
 
       <section className="space-y-2">
         <h2 className="font-heading text-lg font-semibold">Posts recentes</h2>

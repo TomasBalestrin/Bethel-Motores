@@ -28,10 +28,11 @@ import {
   meetingCreateSchema,
   type MeetingCreateInput,
 } from "@/lib/validators/post";
-import type { MeetingType, PostMeeting } from "@/types/post";
+import type { MeetingType, PostMeeting, PostType } from "@/types/post";
 
 interface MeetingCreateModalProps {
   postId: string;
+  postType: PostType;
   meetingType: MeetingType;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -66,12 +67,17 @@ function defaultsFromMeeting(
       reach: meeting?.metrics?.reach ?? 0,
       impressions: meeting?.metrics?.impressions ?? 0,
       clicks: meeting?.metrics?.clicks ?? 0,
+      hook_rate_3s: meeting?.metrics?.hook_rate_3s ?? null,
+      hold_50: meeting?.metrics?.hold_50 ?? null,
+      hold_75: meeting?.metrics?.hold_75 ?? null,
+      duration_seconds: meeting?.metrics?.duration_seconds ?? null,
     },
   };
 }
 
 export function MeetingCreateModal({
   postId,
+  postType,
   meetingType,
   open,
   onOpenChange,
@@ -172,90 +178,139 @@ export function MeetingCreateModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="m-impressions">Impressões</Label>
-              <Input
-                id="m-impressions"
-                type="number"
-                min={0}
-                {...form.register("metrics.impressions", { valueAsNumber: true })}
-              />
+          {postType === "impulsionar" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <Label htmlFor="m-investment">Investimento (R$)</Label>
+                <Input
+                  id="m-investment"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  {...form.register("metrics.investment", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-followers">Seguidores ganhos</Label>
+                <Input
+                  id="m-followers"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.followers_gained", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-duration">Duração (segundos)</Label>
+                <Input
+                  id="m-duration"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.duration_seconds", {
+                    setValueAs: (v) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-hook">Hook Rate 3s (0-1)</Label>
+                <Input
+                  id="m-hook"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.0001"
+                  placeholder="Ex: 0.4262 = 42,62%"
+                  {...form.register("metrics.hook_rate_3s", {
+                    setValueAs: (v) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-hold50">Hold 50% (0-1)</Label>
+                <Input
+                  id="m-hold50"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.0001"
+                  {...form.register("metrics.hold_50", {
+                    setValueAs: (v) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-hold75">Hold 75% (0-1)</Label>
+                <Input
+                  id="m-hold75"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step="0.0001"
+                  {...form.register("metrics.hold_75", {
+                    setValueAs: (v) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-reach">Alcance</Label>
-              <Input
-                id="m-reach"
-                type="number"
-                min={0}
-                {...form.register("metrics.reach", { valueAsNumber: true })}
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="m-followers">Seguidores ganhos</Label>
+                <Input
+                  id="m-followers"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.followers_gained", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-reach">Alcance</Label>
+                <Input
+                  id="m-reach"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.reach", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-likes">Curtidas</Label>
+                <Input
+                  id="m-likes"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.likes", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-comments">Comentários</Label>
+                <Input
+                  id="m-comments"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.comments", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-shares">Compartilhamentos</Label>
+                <Input
+                  id="m-shares"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.shares", { valueAsNumber: true })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="m-duration">Duração (segundos)</Label>
+                <Input
+                  id="m-duration"
+                  type="number"
+                  min={0}
+                  {...form.register("metrics.duration_seconds", {
+                    setValueAs: (v) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-likes">Curtidas</Label>
-              <Input
-                id="m-likes"
-                type="number"
-                min={0}
-                {...form.register("metrics.likes", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-comments">Comentários</Label>
-              <Input
-                id="m-comments"
-                type="number"
-                min={0}
-                {...form.register("metrics.comments", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-shares">Compartilhamentos</Label>
-              <Input
-                id="m-shares"
-                type="number"
-                min={0}
-                {...form.register("metrics.shares", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-saves">Salvamentos</Label>
-              <Input
-                id="m-saves"
-                type="number"
-                min={0}
-                {...form.register("metrics.saves", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-clicks">Cliques</Label>
-              <Input
-                id="m-clicks"
-                type="number"
-                min={0}
-                {...form.register("metrics.clicks", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="m-followers">Seguidores ganhos</Label>
-              <Input
-                id="m-followers"
-                type="number"
-                min={0}
-                {...form.register("metrics.followers_gained", { valueAsNumber: true })}
-              />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label htmlFor="m-investment">Gasto (R$)</Label>
-              <Input
-                id="m-investment"
-                type="number"
-                min={0}
-                step="0.01"
-                {...form.register("metrics.investment", { valueAsNumber: true })}
-              />
-            </div>
-          </div>
+          )}
 
           <label className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-3 text-sm">
             <input
