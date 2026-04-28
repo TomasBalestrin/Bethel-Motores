@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
@@ -32,7 +33,20 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
+    // Verifica a senha atual em um client isolado para não escrever cookies
+    // de sessão na resposta atual e invalidar o refresh token do usuário.
+    const verifier = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      }
+    );
+    const { error: verifyError } = await verifier.auth.signInWithPassword({
       email: user.email,
       password: parsed.data.current_password,
     });
