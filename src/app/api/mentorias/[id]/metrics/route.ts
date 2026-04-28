@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
@@ -53,6 +54,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const data = await insertMentoriaMetrics(supabase, params.id, parsed.data, {
       actorId: user.id,
     });
+
+    revalidatePath("/motors/mentorias");
+    revalidatePath(`/motors/mentorias/${params.id}`);
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {

@@ -3,6 +3,12 @@ import { z } from "zod";
 export const MENTORIA_STATUSES = ["em_andamento", "concluida"] as const;
 export type MentoriaStatus = (typeof MENTORIA_STATUSES)[number];
 
+// Janela aceita pra scheduled_at: 10 anos pra trás, 5 anos pra frente.
+// Bloqueia digitação errada (ex: 2202 em vez de 2022) que escaparia da
+// validação genérica de data.
+const SCHEDULED_AT_PAST_YEARS = 10;
+const SCHEDULED_AT_FUTURE_YEARS = 5;
+
 export const mentoriaCreateSchema = z.object({
   name: z.string().trim().min(3, "Mínimo 3 caracteres").max(120),
   scheduled_at: z
@@ -10,7 +16,19 @@ export const mentoriaCreateSchema = z.object({
     .min(1, "Informe data e horário")
     .refine((value) => !Number.isNaN(new Date(value).getTime()), {
       message: "Data inválida",
-    }),
+    })
+    .refine(
+      (value) => {
+        const t = new Date(value).getTime();
+        const now = Date.now();
+        const earliest = now - SCHEDULED_AT_PAST_YEARS * 365 * 86400 * 1000;
+        const latest = now + SCHEDULED_AT_FUTURE_YEARS * 365 * 86400 * 1000;
+        return t >= earliest && t <= latest;
+      },
+      {
+        message: `Data fora do intervalo aceito (-${SCHEDULED_AT_PAST_YEARS}a / +${SCHEDULED_AT_FUTURE_YEARS}a)`,
+      }
+    ),
   specialist_id: z.string().uuid("Selecione um especialista"),
   traffic_budget: z
     .union([z.number().nonnegative(), z.null()])

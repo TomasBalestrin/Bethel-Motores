@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -70,6 +71,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
       { actorId: user.id }
     );
+
+    revalidatePath(`/motors/mentorias/${params.id}/disparos`);
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {

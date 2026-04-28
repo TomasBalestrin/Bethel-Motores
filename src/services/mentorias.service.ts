@@ -11,9 +11,12 @@ import type {
   MentoriaCreateInput,
   MentoriaStatus,
   MentoriaSort,
+  TrafegoPlatform,
 } from "@/lib/validators/mentoria";
 import type { MentoriaFilters, MentoriaWithMetrics } from "@/types/mentoria";
 import { logAudit } from "@/services/audit.service";
+
+export type { TrafegoPlatform };
 
 interface MetricRow {
   mentoria_id: string;
@@ -218,6 +221,10 @@ const MENTORIA_SELECT = `
   )
 `;
 
+// Hints para o PostgREST limitar o embedded mentoria_metrics à snapshot mais
+// recente. Sem isso, o select traz TODAS as snapshots por mentoria.
+const LATEST_SNAPSHOT_FOREIGN = "latest_metrics" as const;
+
 interface LiveLeadStats {
   total_leads: number;
   leads_grupo: number;
@@ -308,7 +315,12 @@ export async function listMentorias(
   let query = supabase
     .from("mentorias")
     .select(MENTORIA_SELECT)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("captured_at", {
+      foreignTable: LATEST_SNAPSHOT_FOREIGN,
+      ascending: false,
+    })
+    .limit(1, { foreignTable: LATEST_SNAPSHOT_FOREIGN });
 
   if (filters.status && filters.status !== "all") {
     query = query.eq("status", filters.status);
@@ -321,12 +333,58 @@ export async function listMentorias(
   const { data, error } = await query.returns<MentoriaRow[]>();
   if (error) throw error;
 
-  const mentorias = (data ?? []).map((row) => toMentoriaDTO(row));
+  const rows = data ?? [];
+  // Live stats por mentoria via RPC (paralelo). Mantém consistência com
+  // /motors/mentorias/[id] que também usa get_mentoria_lead_stats.
+  const liveById = await fetchLiveStatsForMentorias(
+    supabase,
+    rows.map((row) => row.id)
+  );
+
+  const mentorias = rows.map((row) =>
+    toMentoriaDTO(row, liveById.get(row.id) ?? null)
+  );
   return applySort(mentorias, filters.sort);
+}
+
+async function fetchLiveStatsForMentorias(
+  supabase: SupabaseClient,
+  ids: string[]
+): Promise<Map<string, LiveLeadStats>> {
+  const map = new Map<string, LiveLeadStats>();
+  if (ids.length === 0) return map;
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const { data } = await supabase
+        .rpc("get_mentoria_lead_stats", { p_mentoria_id: id })
+        .maybeSingle<LiveLeadStats>();
+      return [id, data] as const;
+    })
+  );
+  for (const [id, stats] of results) {
+    if (stats) map.set(id, stats);
+  }
+  return map;
 }
 
 export interface CreateMentoriaOptions {
   actorId?: string;
+}
+
+async function assertSpecialistExists(
+  supabase: SupabaseClient,
+  specialistId: string
+): Promise<void> {
+  const { data } = await supabase
+    .from("social_profiles")
+    .select("id")
+    .eq("id", specialistId)
+    .is("deleted_at", null)
+    .maybeSingle<{ id: string }>();
+
+  if (!data) {
+    throw new Error("Especialista não encontrado");
+  }
 }
 
 export async function createMentoria(
@@ -334,6 +392,8 @@ export async function createMentoria(
   input: MentoriaCreateInput,
   options: CreateMentoriaOptions = {}
 ): Promise<{ id: string }> {
+  await assertSpecialistExists(supabase, input.specialist_id);
+
   const row = {
     name: input.name,
     scheduled_at: input.scheduled_at,
@@ -441,6 +501,10 @@ export async function updateMentoria(
   }>,
   options: { actorId?: string | null } = {}
 ): Promise<{ id: string }> {
+  if (patch.specialist_id !== undefined) {
+    await assertSpecialistExists(supabase, patch.specialist_id);
+  }
+
   const { data: before } = await supabase
     .from("mentorias")
     .select("name, scheduled_at, specialist_id, traffic_budget, status")
@@ -471,13 +535,6 @@ export async function updateMentoria(
 
   return data;
 }
-
-export type TrafegoPlatform =
-  | "meta_ads"
-  | "google_ads"
-  | "tiktok"
-  | "youtube"
-  | "outro";
 
 export interface TrafegoEntry {
   id: string;
@@ -556,19 +613,27 @@ export async function insertTrafegoEntry(
   mentoriaId: string,
   input: InsertTrafegoInput
 ): Promise<{ id: string }> {
+  // mentoria_metrics é lido como "estado atual" pegando a snapshot mais
+  // recente. Lançamentos de tráfego precisam carregar os campos manuais
+  // (calls, vendas, leads, etc) — senão a próxima leitura zera esses campos.
+  // O campo investimento_trafego desta linha continua sendo o delta;
+  // listTrafegoByMentoria usa `platform IS NOT NULL` como discriminador.
+  const baseline = await latestSnapshotForMentoria(supabase, mentoriaId);
+
   const { data, error } = await supabase
     .from("mentoria_metrics")
     .insert({
       mentoria_id: mentoriaId,
       investimento_trafego: input.value,
       investimento_api: 0,
-      leads_grupo: 0,
-      leads_ao_vivo: 0,
-      agendamentos: 0,
-      calls_realizadas: 0,
-      vendas: 0,
-      valor_vendas: 0,
-      valor_entrada: 0,
+      total_leads: baseline.total_leads,
+      leads_grupo: baseline.leads_grupo,
+      leads_ao_vivo: baseline.leads_ao_vivo,
+      agendamentos: baseline.agendamentos,
+      calls_realizadas: baseline.calls_realizadas,
+      vendas: baseline.vendas,
+      valor_vendas: baseline.valor_vendas,
+      valor_entrada: baseline.valor_entrada,
       source: "manual",
       platform: input.platform ?? "meta_ads",
       creative_id: input.creativeId ?? null,
@@ -596,17 +661,22 @@ export async function insertTrafegoBatch(
   options: { actorId?: string | null } = {}
 ): Promise<number> {
   if (entries.length === 0) return 0;
+  // Cada lançamento de tráfego precisa carregar os campos manuais — senão
+  // o reader "latest snapshot" zera calls/leads/vendas após o batch.
+  const baseline = await latestSnapshotForMentoria(supabase, mentoriaId);
+
   const rows = entries.map((e) => ({
     mentoria_id: mentoriaId,
     investimento_trafego: e.value,
     investimento_api: 0,
-    leads_grupo: 0,
-    leads_ao_vivo: 0,
-    agendamentos: 0,
-    calls_realizadas: 0,
-    vendas: 0,
-    valor_vendas: 0,
-    valor_entrada: 0,
+    total_leads: baseline.total_leads,
+    leads_grupo: baseline.leads_grupo,
+    leads_ao_vivo: baseline.leads_ao_vivo,
+    agendamentos: baseline.agendamentos,
+    calls_realizadas: baseline.calls_realizadas,
+    vendas: baseline.vendas,
+    valor_vendas: baseline.valor_vendas,
+    valor_entrada: baseline.valor_entrada,
     source: "manual" as const,
     platform: e.platform ?? "meta_ads",
     creative_id: e.creativeId ?? null,
@@ -616,6 +686,72 @@ export async function insertTrafegoBatch(
   const { error } = await supabase.from("mentoria_metrics").insert(rows);
   if (error) throw error;
   return rows.length;
+}
+
+interface LatestSnapshotState {
+  total_leads: number;
+  leads_grupo: number;
+  leads_ao_vivo: number;
+  agendamentos: number;
+  calls_realizadas: number;
+  vendas: number;
+  valor_vendas: number;
+  valor_entrada: number;
+  investimento_trafego: number;
+  investimento_api: number;
+}
+
+const EMPTY_SNAPSHOT: LatestSnapshotState = {
+  total_leads: 0,
+  leads_grupo: 0,
+  leads_ao_vivo: 0,
+  agendamentos: 0,
+  calls_realizadas: 0,
+  vendas: 0,
+  valor_vendas: 0,
+  valor_entrada: 0,
+  investimento_trafego: 0,
+  investimento_api: 0,
+};
+
+async function latestSnapshotForMentoria(
+  supabase: SupabaseClient,
+  mentoriaId: string
+): Promise<LatestSnapshotState> {
+  const { data } = await supabase
+    .from("mentoria_metrics")
+    .select(
+      "total_leads, leads_grupo, leads_ao_vivo, agendamentos, calls_realizadas, vendas, valor_vendas, valor_entrada, investimento_trafego, investimento_api"
+    )
+    .eq("mentoria_id", mentoriaId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{
+      total_leads: number | null;
+      leads_grupo: number | null;
+      leads_ao_vivo: number | null;
+      agendamentos: number | null;
+      calls_realizadas: number | null;
+      vendas: number | null;
+      valor_vendas: number | null;
+      valor_entrada: number | null;
+      investimento_trafego: number | null;
+      investimento_api: number | null;
+    }>();
+
+  if (!data) return { ...EMPTY_SNAPSHOT };
+  return {
+    total_leads: Number(data.total_leads ?? 0),
+    leads_grupo: Number(data.leads_grupo ?? 0),
+    leads_ao_vivo: Number(data.leads_ao_vivo ?? 0),
+    agendamentos: Number(data.agendamentos ?? 0),
+    calls_realizadas: Number(data.calls_realizadas ?? 0),
+    vendas: Number(data.vendas ?? 0),
+    valor_vendas: Number(data.valor_vendas ?? 0),
+    valor_entrada: Number(data.valor_entrada ?? 0),
+    investimento_trafego: Number(data.investimento_trafego ?? 0),
+    investimento_api: Number(data.investimento_api ?? 0),
+  };
 }
 
 export interface TrafegoBudget {
@@ -710,12 +846,20 @@ export async function getTrafegoKPIs(
     trafficFunnelsResult.data?.map((f) => f.id) ?? [];
   let totalLeads = 0;
   let vendas = 0;
+  let qualifiedLeads = 0;
 
   if (trafficFunnelIds.length > 0) {
-    const { data: aggRows } = await supabase.rpc(
-      "get_funnel_lead_aggregates",
-      { funnel_ids: trafficFunnelIds }
-    );
+    const [{ data: aggRows }, { count: qualifiedCount }] = await Promise.all([
+      supabase.rpc("get_funnel_lead_aggregates", {
+        funnel_ids: trafficFunnelIds,
+      }),
+      supabase
+        .from("mentoria_leads")
+        .select("id", { count: "exact", head: true })
+        .in("funnel_id", trafficFunnelIds)
+        .eq("is_qualified", true)
+        .is("deleted_at", null),
+    ]);
     if (Array.isArray(aggRows)) {
       for (const row of aggRows as Array<{
         leads_do_funil: number | null;
@@ -725,18 +869,7 @@ export async function getTrafegoKPIs(
         vendas += Number(row.vendas ?? 0);
       }
     }
-  }
-
-  // Count qualified leads among the traffic funnels
-  let qualifiedLeads = 0;
-  if (trafficFunnelIds.length > 0) {
-    const { count } = await supabase
-      .from("mentoria_leads")
-      .select("id", { count: "exact", head: true })
-      .in("funnel_id", trafficFunnelIds)
-      .eq("is_qualified", true)
-      .is("deleted_at", null);
-    qualifiedLeads = Number(count ?? 0);
+    qualifiedLeads = Number(qualifiedCount ?? 0);
   }
 
   const creatives = creativesResult.data ?? [];
@@ -818,34 +951,6 @@ function pickPath(payload: unknown, path: string): unknown {
   return current;
 }
 
-function deepFindByKey(
-  payload: unknown,
-  keyName: string,
-  match: (v: unknown) => boolean
-): unknown {
-  const needle = keyName.toLowerCase();
-  const queue: unknown[] = [payload];
-  const visited = new WeakSet<object>();
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current || typeof current !== "object") continue;
-    if (visited.has(current as object)) continue;
-    visited.add(current as object);
-    if (Array.isArray(current)) {
-      for (const v of current) queue.push(v);
-      continue;
-    }
-    const obj = current as Record<string, unknown>;
-    for (const [k, v] of Object.entries(obj)) {
-      if (k.toLowerCase() === needle && match(v)) return v;
-    }
-    for (const v of Object.values(obj)) {
-      if (v && typeof v === "object") queue.push(v);
-    }
-  }
-  return undefined;
-}
-
 function coerceNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -864,31 +969,72 @@ function coerceString(value: unknown): string | null {
   return null;
 }
 
-function pickNumber(payload: unknown, keys: string[]): number {
-  if (payload == null) return 0;
+// Faz um BFS único no payload e indexa todos os valores por nome de chave
+// (lowercase). Custa O(nodes) por evento ao invés de O(nodes × campos).
+function indexPayloadByKey(payload: unknown): Map<string, unknown[]> {
+  const index = new Map<string, unknown[]>();
+  if (payload == null || typeof payload !== "object") return index;
+  const queue: unknown[] = [payload];
+  const visited = new WeakSet<object>();
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    if (visited.has(current as object)) continue;
+    visited.add(current as object);
+    if (Array.isArray(current)) {
+      for (const v of current) queue.push(v);
+      continue;
+    }
+    for (const [k, v] of Object.entries(current as Record<string, unknown>)) {
+      const lower = k.toLowerCase();
+      const bucket = index.get(lower);
+      if (bucket) bucket.push(v);
+      else index.set(lower, [v]);
+      if (v && typeof v === "object") queue.push(v);
+    }
+  }
+  return index;
+}
+
+function pickNumberFromIndex(
+  payload: unknown,
+  index: Map<string, unknown[]>,
+  keys: string[]
+): number {
   for (const key of keys) {
-    const direct = pickPath(payload, key);
-    const asNum = coerceNumber(direct);
-    if (asNum !== null) return asNum;
-    if (!key.includes(".")) {
-      const deep = deepFindByKey(payload, key, (v) => coerceNumber(v) !== null);
-      const asDeep = coerceNumber(deep);
-      if (asDeep !== null) return asDeep;
+    if (key.includes(".")) {
+      const direct = pickPath(payload, key);
+      const asNum = coerceNumber(direct);
+      if (asNum !== null) return asNum;
+      continue;
+    }
+    const bucket = index.get(key.toLowerCase());
+    if (!bucket) continue;
+    for (const v of bucket) {
+      const asNum = coerceNumber(v);
+      if (asNum !== null) return asNum;
     }
   }
   return 0;
 }
 
-function pickString(payload: unknown, keys: string[]): string | null {
-  if (payload == null) return null;
+function pickStringFromIndex(
+  payload: unknown,
+  index: Map<string, unknown[]>,
+  keys: string[]
+): string | null {
   for (const key of keys) {
-    const direct = pickPath(payload, key);
-    const asStr = coerceString(direct);
-    if (asStr !== null) return asStr;
-    if (!key.includes(".")) {
-      const deep = deepFindByKey(payload, key, (v) => coerceString(v) !== null);
-      const asDeep = coerceString(deep);
-      if (asDeep !== null) return asDeep;
+    if (key.includes(".")) {
+      const direct = pickPath(payload, key);
+      const asStr = coerceString(direct);
+      if (asStr !== null) return asStr;
+      continue;
+    }
+    const bucket = index.get(key.toLowerCase());
+    if (!bucket) continue;
+    for (const v of bucket) {
+      const asStr = coerceString(v);
+      if (asStr !== null) return asStr;
     }
   }
   return null;
@@ -896,6 +1042,7 @@ function pickString(payload: unknown, keys: string[]): string | null {
 
 function toDisparoDTO(row: DisparoRow): DisparoEvent {
   const payload = row.payload ?? {};
+  const index = indexPayloadByKey(payload);
   return {
     id: row.id,
     source_id: row.source_id,
@@ -907,7 +1054,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
     source_event_id: row.source_event_id,
     received_at: row.received_at,
     processed_at: row.processed_at,
-    volume_sent: pickNumber(payload, [
+    volume_sent: pickNumberFromIndex(payload, index, [
       "volume",
       "volume_sent",
       "sent",
@@ -915,14 +1062,14 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.sent",
       "stats.enviados",
     ]),
-    volume_delivered: pickNumber(payload, [
+    volume_delivered: pickNumberFromIndex(payload, index, [
       "volume_delivered",
       "delivered",
       "stats.delivered",
       "metrics.delivered",
       "stats.entregues",
     ]),
-    volume_read: pickNumber(payload, [
+    volume_read: pickNumberFromIndex(payload, index, [
       "read",
       "volume_read",
       "reads",
@@ -930,7 +1077,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.read",
       "stats.lidos",
     ]),
-    volume_replied: pickNumber(payload, [
+    volume_replied: pickNumberFromIndex(payload, index, [
       "replied",
       "volume_replied",
       "replies",
@@ -939,7 +1086,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.replied",
       "stats.respondidos",
     ]),
-    volume_failed: pickNumber(payload, [
+    volume_failed: pickNumberFromIndex(payload, index, [
       "failed",
       "volume_failed",
       "failures",
@@ -948,7 +1095,7 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "metrics.failed",
       "stats.falhas",
     ]),
-    cost: pickNumber(payload, [
+    cost: pickNumberFromIndex(payload, index, [
       "cost",
       "amount",
       "value",
@@ -956,12 +1103,12 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "total_cost",
       "stats.cost",
     ]),
-    funnel_label: pickString(payload, [
+    funnel_label: pickStringFromIndex(payload, index, [
       "funnel",
       "funnel_name",
       "funnel_id",
     ]),
-    campaign_name: pickString(payload, [
+    campaign_name: pickStringFromIndex(payload, index, [
       "campaign_name",
       "campaign",
       "disparo_name",
@@ -970,13 +1117,13 @@ function toDisparoDTO(row: DisparoRow): DisparoEvent {
       "broadcast",
       "title",
     ]),
-    template_name: pickString(payload, [
+    template_name: pickStringFromIndex(payload, index, [
       "template_name",
       "template",
       "template_id",
       "template.name",
     ]),
-    responsible_name: pickString(payload, [
+    responsible_name: pickStringFromIndex(payload, index, [
       "responsible_name",
       "responsible",
       "responsavel",
@@ -1022,26 +1169,22 @@ export async function listDisparosByMentoria(
 async function resolveFluxonSourceId(
   supabase: SupabaseClient
 ): Promise<string> {
+  // Não cria a source automaticamente. Criar com is_active=true e sem
+  // webhook_secret_hash deixava o source pronto pra rejeitar webhooks
+  // inbound silenciosamente. Se a source não existe, falha explícita pra
+  // que admin a configure em /settings/integrations.
   const { data } = await supabase
     .from("integration_sources")
     .select("id")
     .eq("slug", "fluxon")
     .maybeSingle<{ id: string }>();
 
-  if (data?.id) return data.id;
-
-  const { data: inserted, error } = await supabase
-    .from("integration_sources")
-    .insert({
-      slug: "fluxon",
-      name: "Fluxon",
-      is_active: true,
-    })
-    .select("id")
-    .single<{ id: string }>();
-
-  if (error) throw error;
-  return inserted.id;
+  if (!data?.id) {
+    throw new Error(
+      "Integração 'fluxon' não cadastrada. Configure em Settings → Integrações antes de criar disparos manuais."
+    );
+  }
+  return data.id;
 }
 
 export interface DisparoManualPayload {
@@ -1117,14 +1260,28 @@ export async function updateManualDisparo(
   input: DisparoManualPayload,
   options: { actorId?: string | null } = {}
 ): Promise<void> {
+  // Eventos vindos de webhook (source_event_id != null) carregam o payload
+  // bruto recebido pela integração; sobrescrever destruiria a auditoria.
+  // Edição manual só é permitida em entradas criadas via createManualDisparo
+  // (que sempre tem source_event_id NULL).
   const { data: before } = await supabase
     .from("integration_events")
-    .select("payload, received_at")
+    .select("payload, received_at, source_event_id")
     .eq("id", eventId)
     .maybeSingle<{
       payload: Record<string, unknown> | null;
       received_at: string;
+      source_event_id: string | null;
     }>();
+
+  if (!before) {
+    throw new Error("Disparo não encontrado");
+  }
+  if (before.source_event_id !== null) {
+    throw new Error(
+      "Este disparo veio de webhook e não pode ser editado — preserva auditoria do payload original"
+    );
+  }
 
   const { error } = await supabase
     .from("integration_events")
@@ -1132,7 +1289,8 @@ export async function updateManualDisparo(
       payload: buildDisparoPayload(input),
       received_at: input.received_at,
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .is("source_event_id", null);
 
   if (error) throw error;
 
@@ -1142,7 +1300,7 @@ export async function updateManualDisparo(
     entityType: "disparo",
     entityId: eventId,
     changes: {
-      before: before ? (before as Record<string, unknown>) : null,
+      before: before as Record<string, unknown>,
       after: input as unknown as Record<string, unknown>,
     },
   });
@@ -1153,10 +1311,27 @@ export async function deleteManualDisparo(
   eventId: string,
   options: { actorId?: string | null } = {}
 ): Promise<void> {
+  // Mesmo guard de updateManualDisparo: só remove eventos manuais.
+  const { data: before } = await supabase
+    .from("integration_events")
+    .select("source_event_id")
+    .eq("id", eventId)
+    .maybeSingle<{ source_event_id: string | null }>();
+
+  if (!before) {
+    throw new Error("Disparo não encontrado");
+  }
+  if (before.source_event_id !== null) {
+    throw new Error(
+      "Este disparo veio de webhook e não pode ser excluído — preserva auditoria do payload original"
+    );
+  }
+
   const { error } = await supabase
     .from("integration_events")
     .delete()
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .is("source_event_id", null);
 
   if (error) throw error;
 
@@ -1181,18 +1356,26 @@ export async function compareByIds(
 ): Promise<CompareResult> {
   const uniqueIds = Array.from(new Set(ids));
 
-  const { data, error } = await supabase
-    .from("mentorias")
-    .select(MENTORIA_SELECT)
-    .in("id", uniqueIds)
-    .is("deleted_at", null)
-    .returns<MentoriaRow[]>();
+  const [{ data, error }, liveById] = await Promise.all([
+    supabase
+      .from("mentorias")
+      .select(MENTORIA_SELECT)
+      .in("id", uniqueIds)
+      .is("deleted_at", null)
+      .order("captured_at", {
+        foreignTable: LATEST_SNAPSHOT_FOREIGN,
+        ascending: false,
+      })
+      .limit(1, { foreignTable: LATEST_SNAPSHOT_FOREIGN })
+      .returns<MentoriaRow[]>(),
+    fetchLiveStatsForMentorias(supabase, uniqueIds),
+  ]);
 
   if (error) throw error;
 
   const mentoriasById = new Map<string, MentoriaWithMetrics>();
   for (const row of data ?? []) {
-    mentoriasById.set(row.id, toMentoriaDTO(row));
+    mentoriasById.set(row.id, toMentoriaDTO(row, liveById.get(row.id) ?? null));
   }
 
   const ordered: MentoriaWithMetrics[] = [];
@@ -1287,6 +1470,11 @@ export async function getMentoriaWithMetricsById(
       .select(MENTORIA_SELECT)
       .eq("id", mentoriaId)
       .is("deleted_at", null)
+      .order("captured_at", {
+        foreignTable: LATEST_SNAPSHOT_FOREIGN,
+        ascending: false,
+      })
+      .limit(1, { foreignTable: LATEST_SNAPSHOT_FOREIGN })
       .maybeSingle<MentoriaRow>(),
     supabase
       .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
@@ -86,6 +87,9 @@ export async function POST(request: NextRequest) {
     const mentoria = await createMentoria(supabase, parsed.data, {
       actorId: user.id,
     });
+
+    revalidatePath("/motors/mentorias");
+    revalidatePath("/motors/mentorias/listagem");
 
     return NextResponse.json({ data: mentoria }, { status: 201 });
   } catch (error) {

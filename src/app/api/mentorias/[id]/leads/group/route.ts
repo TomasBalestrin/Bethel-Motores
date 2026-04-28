@@ -1,9 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
 import { attendanceBulkSchema } from "@/lib/validators/lead";
-import { markGroupByMatching } from "@/services/leads.service";
+import {
+  MatchingTooLargeError,
+  markGroupByMatching,
+} from "@/services/leads.service";
 
 interface RouteParams {
   params: { id: string };
@@ -57,8 +61,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { actorId: user.id }
     );
 
+    revalidatePath(`/motors/mentorias/${params.id}`, "layout");
+    revalidatePath("/motors/mentorias");
+
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
+    if (error instanceof MatchingTooLargeError) {
+      return NextResponse.json({ error: error.message }, { status: 413 });
+    }
     console.error("[POST /api/mentorias/[id]/leads/group]", error);
     const message =
       error && typeof error === "object" && "message" in error

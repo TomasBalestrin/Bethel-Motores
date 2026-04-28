@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
@@ -99,6 +100,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const data = await updateMentoria(supabase, params.id, patch, {
       actorId: user.id,
     });
+    revalidatePath("/motors/mentorias");
+    revalidatePath("/motors/mentorias/listagem");
+    revalidatePath(`/motors/mentorias/${params.id}`, "layout");
     return NextResponse.json({ data });
   } catch (error) {
     console.error("[PATCH /api/mentorias/[id]]", error);
