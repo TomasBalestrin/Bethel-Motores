@@ -79,11 +79,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const adapted = adaptByType(source.type, rawPayload);
 
+    // Lê `data.captured_at_iso` se enviado (Fluxon manda meia-noite BRT do dia
+    // do disparo). Usa como `received_at` pra que a tela de Disparos mostre a
+    // data semântica do dia, e não o momento do POST.
+    const capturedAtIso = extractCapturedAtIso(adapted.payload);
+
     const inserted = await insertEvent(supabase, {
       source_id: source.id,
       mentoria_id: adapted.mentoriaId,
       payload: adapted.payload,
       source_event_id: adapted.sourceEventId,
+      ...(capturedAtIso && { received_at: capturedAtIso }),
     });
 
     await touchSourceLastReceived(supabase, source.id);
@@ -126,6 +132,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         mentoriaId: adapted.mentoriaId,
         parentSourceEventId: adapted.sourceEventId,
         payload: adapted.payload,
+        receivedAt: capturedAtIso,
       });
     }
 
@@ -151,6 +158,8 @@ interface FanoutInput {
   mentoriaId: string | null;
   parentSourceEventId: string;
   payload: Record<string, unknown>;
+  /** Quando definido, propaga pra `received_at` dos filhos. */
+  receivedAt: string | null;
 }
 
 async function fanoutFluxonTemplates(
@@ -176,6 +185,7 @@ async function fanoutFluxonTemplates(
         mentoria_id: input.mentoriaId,
         payload: child.payload,
         source_event_id: child.sourceEventId,
+        ...(input.receivedAt && { received_at: input.receivedAt }),
       });
 
       if (!inserted.duplicate) {
@@ -192,4 +202,20 @@ async function fanoutFluxonTemplates(
     }
   }
   return created;
+}
+
+/**
+ * Lê `data.captured_at_iso` do payload (validando como ISO 8601). Retorna `null`
+ * se não estiver presente ou for inválido — caller usa default `now()` da coluna.
+ */
+function extractCapturedAtIso(payload: Record<string, unknown>): string | null {
+  const data = payload?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  const raw = (data as Record<string, unknown>).captured_at_iso;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed).toISOString();
 }

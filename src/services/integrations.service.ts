@@ -212,6 +212,12 @@ export interface InsertEventInput {
   mentoria_id: string | null;
   payload: Record<string, unknown>;
   source_event_id: string | null;
+  /**
+   * ISO 8601. Quando passado, sobrescreve o default `now()` da coluna `received_at`.
+   * Usado pelo fanout do Fluxon (que carrega `data.captured_at_iso` no payload) pra
+   * que a tela de Disparos exiba a data semântica do disparo, não o instante do POST.
+   */
+  received_at?: string;
 }
 
 export interface InsertEventResult {
@@ -236,15 +242,20 @@ export async function insertEvent(
     }
   }
 
+  const insertPayload: Record<string, unknown> = {
+    source_id: input.source_id,
+    mentoria_id: input.mentoria_id,
+    payload: input.payload,
+    source_event_id: input.source_event_id,
+    status: "pending",
+  };
+  if (input.received_at) {
+    insertPayload.received_at = input.received_at;
+  }
+
   const { data, error } = await supabase
     .from("integration_events")
-    .insert({
-      source_id: input.source_id,
-      mentoria_id: input.mentoria_id,
-      payload: input.payload,
-      source_event_id: input.source_event_id,
-      status: "pending",
-    })
+    .insert(insertPayload)
     .select("id")
     .single<{ id: string }>();
 
