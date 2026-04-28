@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { assertRole } from "@/lib/auth/guard";
@@ -96,6 +97,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       actorId: user.id,
     });
 
+    revalidatePath("/motors/mentorias", "layout");
+
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/funnels/[id]/leads]", error);
@@ -130,6 +133,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     }
 
     await deleteAllLeadsByFunnel(supabase, params.id, { actorId: user.id });
+
+    revalidatePath("/motors/mentorias", "layout");
 
     return NextResponse.json({ data: { ok: true } });
   } catch (error) {

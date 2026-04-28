@@ -84,9 +84,14 @@ export function MentoriaMetricsDrawer({
   const [form, setForm] = useState<FormState>(() => seedFromCurrent(current));
   const [submitting, setSubmitting] = useState(false);
 
+  // Re-seed apenas na abertura — não quando `current` muda enquanto aberto.
+  // Caso contrário, um router.refresh() durante o preenchimento sobrescreve
+  // o que o usuário já digitou. Por isso `current` fica de fora das deps
+  // de propósito.
   useEffect(() => {
     if (open) setForm(seedFromCurrent(current));
-  }, [open, current]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function setField(key: FieldKey, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));

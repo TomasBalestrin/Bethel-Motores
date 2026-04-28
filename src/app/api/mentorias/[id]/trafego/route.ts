@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
@@ -87,6 +88,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       capturedAt: parsed.data.captured_at,
       actorId: user.id,
     });
+    revalidatePath(`/motors/mentorias/${params.id}/trafego`);
+    revalidatePath(`/motors/mentorias/${params.id}`);
+    revalidatePath("/motors/mentorias");
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/mentorias/[id]/trafego]", error);

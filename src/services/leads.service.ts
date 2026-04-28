@@ -517,24 +517,50 @@ async function latestManualSnapshot(
   };
 }
 
+// Mutex per-mentoria-per-process. Serializa read-baseline → compute → insert
+// quando múltiplas mutations chegam concorrentes pra mesma mentoria. Não
+// resolve concorrência cross-instance (precisaria de advisory lock no DB),
+// mas elimina interleaving dentro do mesmo Node worker.
+const recalcLocks = new Map<string, Promise<void>>();
+
 export async function recalcMentoriaMetricsFromLeads(
   supabase: SupabaseClient,
   mentoriaId: string,
   options: { actorId?: string | null } = {}
 ): Promise<void> {
-  const baseline = await latestManualSnapshot(supabase, mentoriaId);
+  const previous = recalcLocks.get(mentoriaId) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => doRecalc(supabase, mentoriaId, options));
+  recalcLocks.set(mentoriaId, next);
+  try {
+    await next;
+  } finally {
+    if (recalcLocks.get(mentoriaId) === next) {
+      recalcLocks.delete(mentoriaId);
+    }
+  }
+}
 
-  const { data: stats } = await supabase
-    .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
-    .maybeSingle<{
-      total_leads: number;
-      leads_grupo: number;
-      leads_ao_vivo: number;
-      agendamentos: number;
-      vendas: number;
-      valor_vendas: number;
-      valor_entrada: number;
-    }>();
+async function doRecalc(
+  supabase: SupabaseClient,
+  mentoriaId: string,
+  options: { actorId?: string | null }
+): Promise<void> {
+  const [baseline, { data: stats }] = await Promise.all([
+    latestManualSnapshot(supabase, mentoriaId),
+    supabase
+      .rpc("get_mentoria_lead_stats", { p_mentoria_id: mentoriaId })
+      .maybeSingle<{
+        total_leads: number;
+        leads_grupo: number;
+        leads_ao_vivo: number;
+        agendamentos: number;
+        vendas: number;
+        valor_vendas: number;
+        valor_entrada: number;
+      }>(),
+  ]);
 
   const snapshot = {
     mentoria_id: mentoriaId,
@@ -587,12 +613,49 @@ function pushToIndex<K, V>(map: Map<K, V[]>, key: K, value: V) {
 // PostgREST aplica max-rows=1000 por resposta (inclusive em RPC).
 // Paginamos em lotes de 1000 com .order("id") para garantir consistência
 // e cobrir todos os leads da mentoria (ex: 8k+ leads em 9 batches).
+//
+// Bound: ~30k leads (30 batches sequenciais ≈ 5–6s no Vercel). Acima disso
+// os timeouts do edge runtime tornam a operação não-confiável; o caller
+// recebe MATCHING_TIMEOUT pra mostrar mensagem clara ao usuário.
+//
+// Ideal: mover o matching pra RPC SQL (SELECT … FROM mentoria_leads JOIN
+// payload USING (normalized_phone) …). Mantido client-side enquanto a
+// migration não desce em produção.
+const MATCHING_MAX_LEADS = 30_000;
+const MATCHING_BATCH_SIZE = 1000;
+
+export class MatchingTooLargeError extends Error {
+  constructor(public readonly totalLeads: number) {
+    super(
+      `Mentoria tem ${totalLeads}+ leads — matching client-side ultrapassa o timeout. Faça em lotes menores ou peça pra mover o matching pra RPC SQL.`
+    );
+    this.name = "MatchingTooLargeError";
+  }
+}
+
+// `IN (…)` com 30k UUIDs estoura o limite de query length. Atualiza em
+// chunks de 500 — ainda 1 query por chunk, mas cada uma cabe sem problemas.
+async function updateLeadsInChunks(
+  supabase: SupabaseClient,
+  ids: string[],
+  patch: Record<string, unknown>
+): Promise<void> {
+  const CHUNK = 500;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { error } = await supabase
+      .from("mentoria_leads")
+      .update(patch)
+      .in("id", slice);
+    if (error) throw error;
+  }
+}
+
 async function fetchAllLeadsForMatching(
   supabase: SupabaseClient,
   _mentoriaId: string,
   funnelIds: string[]
 ): Promise<LeadMatchRow[]> {
-  const BATCH = 1000;
   const all: LeadMatchRow[] = [];
   let offset = 0;
   while (true) {
@@ -602,14 +665,16 @@ async function fetchAllLeadsForMatching(
       .in("funnel_id", funnelIds)
       .is("deleted_at", null)
       .order("id", { ascending: true })
-      .range(offset, offset + BATCH - 1)
+      .range(offset, offset + MATCHING_BATCH_SIZE - 1)
       .returns<LeadMatchRow[]>();
     if (error) throw error;
     const rows = data ?? [];
     all.push(...rows);
-    if (rows.length < BATCH) break;
-    offset += BATCH;
-    if (offset > 100_000) break;
+    if (rows.length < MATCHING_BATCH_SIZE) break;
+    offset += MATCHING_BATCH_SIZE;
+    if (all.length >= MATCHING_MAX_LEADS) {
+      throw new MatchingTooLargeError(all.length);
+    }
   }
   return all;
 }
@@ -670,11 +735,7 @@ export async function markAttendanceByMatching(
 
   const ids = Array.from(matchedIds);
   if (ids.length > 0) {
-    const { error: updateError } = await supabase
-      .from("mentoria_leads")
-      .update({ attended: true })
-      .in("id", ids);
-    if (updateError) throw updateError;
+    await updateLeadsInChunks(supabase, ids, { attended: true });
   }
 
   await logAudit(supabase, {
@@ -760,11 +821,7 @@ export async function markGroupByMatching(
 
   const ids = Array.from(matchedIds);
   if (ids.length > 0) {
-    const { error: updateError } = await supabase
-      .from("mentoria_leads")
-      .update({ joined_group: true })
-      .in("id", ids);
-    if (updateError) throw updateError;
+    await updateLeadsInChunks(supabase, ids, { joined_group: true });
   }
 
   await logAudit(supabase, {

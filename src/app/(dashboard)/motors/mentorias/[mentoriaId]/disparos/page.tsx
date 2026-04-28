@@ -36,13 +36,18 @@ function computeTotals(events: DisparoEvent[]): Totals {
   const byTemplate = new Map<string, { count: number; cost: number }>();
 
   for (const event of events) {
+    if (event.status === "error") {
+      errors += 1;
+      continue;
+    }
+    if (event.status !== "processed") continue;
+
     volume += event.volume_sent;
     delivered += event.volume_delivered;
     read += event.volume_read;
     replied += event.volume_replied;
     failed += event.volume_failed;
     cost += event.cost;
-    if (event.status === "error") errors += 1;
 
     const tpl = event.template_name?.trim() || "—";
     const current = byTemplate.get(tpl) ?? { count: 0, cost: 0 };

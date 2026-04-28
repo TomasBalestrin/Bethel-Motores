@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -74,6 +75,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       { actorId: user.id }
     );
 
+    revalidatePath("/motors/mentorias", "layout");
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[PATCH /api/disparos/[eventId]]", error);
@@ -109,6 +112,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
     const admin = createAdminClient();
     await deleteManualDisparo(admin, params.eventId, { actorId: user.id });
+
+    revalidatePath("/motors/mentorias", "layout");
 
     return NextResponse.json({ ok: true });
   } catch (error) {

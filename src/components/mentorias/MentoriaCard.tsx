@@ -22,7 +22,6 @@ interface ProgressRowProps {
 }
 
 function ProgressRow({ label, value, color, muted }: ProgressRowProps) {
-  const pct = Math.max(0, Math.min(100, value));
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
@@ -43,12 +42,12 @@ function ProgressRow({ label, value, color, muted }: ProgressRowProps) {
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={pct}
+        aria-valuenow={value}
         className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
       >
         <div
           className={cn("h-full transition-all", color)}
-          style={{ width: `${pct}%` }}
+          style={{ width: `${value}%` }}
         />
       </div>
     </div>
