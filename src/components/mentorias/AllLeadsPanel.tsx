@@ -21,6 +21,7 @@ import {
 import { useDebounce } from "@/hooks/useDebounce";
 import { useInvalidateLeads } from "@/hooks/useLeads";
 import { useLeadsByMentoria } from "@/hooks/useLeadsByMentoria";
+import { useInvalidateMentoriaData } from "@/hooks/useInvalidateMentoriaData";
 import { LeadsTable } from "./LeadsTable";
 import { AttendanceImportModal } from "./AttendanceImportModal";
 import { GroupImportModal } from "./GroupImportModal";
@@ -46,6 +47,7 @@ export function AllLeadsPanel({
 }: AllLeadsPanelProps) {
   const router = useRouter();
   const invalidate = useInvalidateLeads();
+  const invalidateMentoria = useInvalidateMentoriaData(mentoriaId);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [attendanceOpen, setAttendanceOpen] = useState(false);
@@ -79,6 +81,9 @@ export function AllLeadsPanel({
 
   function handleMutated() {
     invalidate();
+    // Funnel cards + dashboard derivam de aggregates de lead — invalidar
+    // junto pra que mudanças de tag refletem na hora.
+    invalidateMentoria();
     router.refresh();
   }
 
